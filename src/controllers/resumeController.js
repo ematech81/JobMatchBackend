@@ -70,11 +70,30 @@ exports.getMyResume = asyncHandler(async (req, res) => {
   res.json({ resume });
 });
 
+// Client-editable resume fields — `userId` and `source` are server-owned.
+const EDITABLE_RESUME_FIELDS = [
+  'fullName',
+  'desiredTitles',
+  'skills',
+  'experience',
+  'education',
+  'preferredCountry'
+];
+
 exports.updateMyResume = asyncHandler(async (req, res) => {
+  const updates = {};
+  for (const field of EDITABLE_RESUME_FIELDS) {
+    if (req.body[field] !== undefined) updates[field] = req.body[field];
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ message: 'No editable fields provided' });
+  }
+
   const resume = await ParsedResume.findOneAndUpdate(
     { userId: req.user.id },
-    { $set: req.body },
-    { new: true }
+    { $set: updates },
+    { new: true, runValidators: true }
   );
   if (!resume) return res.status(404).json({ message: 'No resume found' });
 

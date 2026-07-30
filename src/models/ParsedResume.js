@@ -29,12 +29,6 @@ const parsedResumeSchema = new mongoose.Schema(
     source: { type: String, enum: ['affinda', 'generated', 'custom-parser'], required: true },
     rawText: String // raw parsed text/backup, useful for re-parsing / PDF regeneration
   },
-  {
-    title: String,
-    company: String,
-    durationMonths: Number,
-    description: String
-  },
   { timestamps: true }
 );
 

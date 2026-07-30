@@ -16,7 +16,7 @@ async function pullAndCacheJobs() {
     for (const title of cronConfig.commonTitles) {
       try {
         const jobs = await searchJobsLive({ query: title, country });
-        const result = await cacheJobs(jobs);
+        await cacheJobs(jobs);
         totalCached += jobs.length;
         console.log(`[Cron] ${title} / ${country}: fetched ${jobs.length} jobs`);
       } catch (err) {

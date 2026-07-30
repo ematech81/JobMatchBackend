@@ -1,5 +1,6 @@
 const asyncHandler = require('../utils/asyncHandler');
 const Match = require('../models/Match');
+const Job = require('../models/Job');
 const ParsedResume = require('../models/ParsedResume');
 const { runMatchingForResume } = require('../services/matchingService');
 

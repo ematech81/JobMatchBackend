@@ -1,3 +1,5 @@
+const { normalizeCountryToCode } = require('./countryCodes');
+
 /**
  * MVP keyword/skill overlap scoring.
  * Weighting (adjustable later per Section 6 open items):
@@ -42,9 +44,16 @@ function skillScore(skills = [], jobText = '') {
   return matched.length / skills.length; // 0..1
 }
 
+/**
+ * Resumes store free-text countries ("Nigeria") while cached jobs store ISO
+ * alpha-2 codes ("NG"), so both sides must be normalized before comparison.
+ */
 function locationScore(preferredCountry, jobCountry) {
   if (!preferredCountry || !jobCountry) return 0;
-  return normalize(preferredCountry) === normalize(jobCountry) ? 1 : 0;
+  const preferred = normalizeCountryToCode(preferredCountry);
+  const job = normalizeCountryToCode(jobCountry);
+  if (!preferred || !job) return 0;
+  return preferred === job ? 1 : 0;
 }
 
 /**

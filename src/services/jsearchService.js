@@ -2,6 +2,7 @@ const axios = require('axios');
 const { jsearch } = require('../config/env');
 const Job = require('../models/Job');
 const { normalizeCountryToCode } = require('../utils/countryCodes');
+const { fixtureJobSearch } = require('./fixtureJobsService');
 
 function mapJSearchResultToJob(raw) {
   return {
@@ -32,11 +33,20 @@ function mapJSearchResultToJob(raw) {
 }
 
 /**
- * Live call to JSearch. Returns the raw job array (JSearch's own field
- * names) — callers map/cache as needed. Counts against the JSearch quota
- * (Section 2.1), so only call this from cache-miss paths and the cron pull.
+ * Fetches raw JSearch-shaped jobs. This is the single network boundary for
+ * job data: when jsearch.dataSource is 'fixture' it serves the recorded
+ * responses in src/jobDummyData/ instead of calling the API, so every
+ * downstream path (mapping, caching, matching, notifications) runs
+ * identically in both modes.
+ *
+ * In live mode this counts against the JSearch quota (Section 2.1), so only
+ * call it from cache-miss paths and the cron pull.
  */
 async function searchJobsLive({ query, country, page = 1 }) {
+  if (jsearch.dataSource === 'fixture') {
+    return fixtureJobSearch({ query, country });
+  }
+
   const response = await axios.get(`${jsearch.baseUrl}/search`, {
     headers: {
       'X-RapidAPI-Key': jsearch.apiKey,
@@ -85,8 +95,13 @@ async function cacheJobs(rawJobs = []) {
  */
 async function searchJobsByCountry(rawCountry, { page = 1, limit = 20 } = {}) {
   const countryCode = normalizeCountryToCode(rawCountry);
+  if (!countryCode) {
+    const err = new Error(`Unrecognized country: "${rawCountry}"`);
+    err.statusCode = 400;
+    throw err;
+  }
 
-  const cached = await Job.find({ country: new RegExp(`^${countryCode}$`, 'i') })
+  const cached = await Job.find({ country: countryCode })
     .sort({ fetched_at: -1 })
     .limit(limit);
 

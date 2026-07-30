@@ -2,6 +2,7 @@ const Job = require('../models/Job');
 const Match = require('../models/Match');
 const ParsedResume = require('../models/ParsedResume');
 const { computeMatchScore } = require('../utils/scoring');
+const { normalizeCountryToCode } = require('../utils/countryCodes');
 const { emitToUser } = require('./socketService');
 
 const MIN_SCORE_THRESHOLD = 40; // MVP cutoff, tune later
@@ -47,17 +48,27 @@ async function runMatchingForResume(resume) {
  * before applying finer-grained scoring in-memory.
  */
 async function buildCandidateJobQuery(resume) {
-  const titleRegexes = (resume.desiredTitles || []).map(
-    (t) => new RegExp(t.split(/\s+/).join('|'), 'i')
-  );
+  const titleRegexes = (resume.desiredTitles || [])
+    .map((t) =>
+      t
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(escapeRegex)
+        .join('|')
+    )
+    .filter(Boolean)
+    .map((pattern) => new RegExp(pattern, 'i'));
 
   const filter = { $or: [] };
 
   if (titleRegexes.length) {
     filter.$or.push({ job_title: { $in: titleRegexes } });
   }
-  if (resume.preferredCountry) {
-    filter.$or.push({ country: new RegExp(`^${resume.preferredCountry}$`, 'i') });
+
+  // Resume countries are free text; cached jobs use ISO codes.
+  const countryCode = normalizeCountryToCode(resume.preferredCountry || '');
+  if (countryCode) {
+    filter.$or.push({ country: countryCode });
   }
   if (filter.$or.length === 0) {
     // No signal to filter on — limit to most recent jobs to avoid scanning everything
@@ -97,6 +108,10 @@ async function runMatchingForAllUsers() {
     results.push({ userId: resume.userId, newMatches: matches.length });
   }
   return results;
+}
+
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 module.exports = { runMatchingForResume, runMatchingForAllUsers };
