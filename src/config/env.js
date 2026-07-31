@@ -51,7 +51,11 @@ module.exports = {
     // 'fixture' serves src/jobDummyData/ instead of calling JSearch. Defaults
     // to fixture outside production so development can't quietly drain the
     // 200 req/month budget; set JOB_DATA_SOURCE=live to hit the real API.
-    dataSource
+    dataSource,
+    // How long a cached Job stays servable before a country search refetches.
+    // Slightly longer than the cron interval so scheduled pulls normally keep
+    // the cache warm and this only fires for gaps the cron didn't cover.
+    cacheTtlHours: Number(process.env.JOB_CACHE_TTL_HOURS || 6)
   },
 
   affinda: {

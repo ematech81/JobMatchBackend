@@ -1,3 +1,6 @@
+const jwt = require('jsonwebtoken');
+const { jwtSecret } = require('../config/env');
+
 let io = null;
 const userSocketMap = new Map(); // userId -> Set of socketIds
 
@@ -7,8 +10,24 @@ function initSocket(server, { clientUrl }) {
     cors: { origin: clientUrl, methods: ['GET', 'POST'] }
   });
 
+  // The identity a socket claims must be proven, not asserted: trusting a
+  // client-supplied userId would let anyone subscribe to another user's job
+  // match notifications. Clients connect with the same JWT the REST API uses.
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token;
+    if (!token) return next(new Error('Authentication required'));
+
+    try {
+      const decoded = jwt.verify(token, jwtSecret);
+      socket.userId = decoded.id;
+      return next();
+    } catch (err) {
+      return next(new Error('Invalid or expired token'));
+    }
+  });
+
   io.on('connection', (socket) => {
-    const userId = socket.handshake.auth?.userId;
+    const userId = socket.userId;
 
     if (userId) {
       if (!userSocketMap.has(userId)) userSocketMap.set(userId, new Set());

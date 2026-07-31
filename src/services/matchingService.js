@@ -22,20 +22,28 @@ async function runMatchingForResume(resume) {
     const score = computeMatchScore(resume, job);
     if (score < MIN_SCORE_THRESHOLD) continue;
 
-    const existing = await Match.findOne({ userId: resume.userId, jobId: job._id });
+    // Atomic upsert: a check-then-insert would race against concurrent runs
+    // (resume save fires matching in the background, cron re-matches all users)
+    // and both writers would hit the unique {userId, jobId} index with E11000.
+    try {
+      const result = await Match.findOneAndUpdate(
+        { userId: resume.userId, jobId: job._id },
+        {
+          $set: { score },
+          $setOnInsert: { matchedAt: new Date(), notified: false }
+        },
+        { upsert: true, new: true, includeResultMetadata: true }
+      );
 
-    if (!existing) {
-      const match = await Match.create({
-        userId: resume.userId,
-        jobId: job._id,
-        score,
-        matchedAt: new Date(),
-        notified: false
-      });
-      newMatches.push(match);
-    } else if (existing.score !== score) {
-      existing.score = score;
-      await existing.save();
+      // Only a genuinely new match should be notified — score updates to an
+      // already-known job must not re-notify the user.
+      if (result.lastErrorObject?.upserted) {
+        newMatches.push(result.value);
+      }
+    } catch (err) {
+      // Two upserts can still collide under exact simultaneity; the other
+      // writer won and the match now exists, which is the desired end state.
+      if (err.code !== 11000) throw err;
     }
   }
 
@@ -44,46 +52,45 @@ async function runMatchingForResume(resume) {
 }
 
 /**
- * Narrows down candidate jobs using title/country as a coarse Mongo filter
- * before applying finer-grained scoring in-memory.
+ * Selects the candidate jobs to score for a resume.
+ *
+ * Preferred country is a hard filter, not a scoring signal (guide 1.3:
+ * "resume's preferred country as location filter"). Title is deliberately NOT
+ * filtered on — it is scored instead, since filtering would drop jobs that
+ * match strongly on skills alone.
  */
 async function buildCandidateJobQuery(resume) {
-  const titleRegexes = (resume.desiredTitles || [])
-    .map((t) =>
-      t
-        .split(/\s+/)
-        .filter(Boolean)
-        .map(escapeRegex)
-        .join('|')
-    )
-    .filter(Boolean)
-    .map((pattern) => new RegExp(pattern, 'i'));
-
-  const filter = { $or: [] };
-
-  if (titleRegexes.length) {
-    filter.$or.push({ job_title: { $in: titleRegexes } });
-  }
-
-  // Resume countries are free text; cached jobs use ISO codes.
+  // Resume countries are free text; cached jobs store ISO codes.
   const countryCode = normalizeCountryToCode(resume.preferredCountry || '');
-  if (countryCode) {
-    filter.$or.push({ country: countryCode });
-  }
-  if (filter.$or.length === 0) {
-    // No signal to filter on — limit to most recent jobs to avoid scanning everything
+
+  if (!countryCode) {
+    // No location preference to filter on — cap the scan rather than scoring
+    // the whole collection.
     return Job.find().sort({ fetched_at: -1 }).limit(200);
   }
 
-  return Job.find(filter).sort({ fetched_at: -1 }).limit(500);
+  // MVP cap: scores the most recently fetched jobs in-country. Revisit when a
+  // single market outgrows this (Section 3.4 flags embeddings as the v2 path).
+  return Job.find({ country: countryCode }).sort({ fetched_at: -1 }).limit(500);
 }
 
 /**
- * Emits a socket.io event per new match and marks it notified.
+ * Emits a socket.io event per new match and marks them notified.
+ *
+ * Job lookups and the notified flag are batched: doing both per-match meant
+ * 2N sequential round-trips, which the cron's all-users run multiplies by the
+ * user count. This is 2 queries regardless of match count.
  */
 async function notifyNewMatches(userId, matches) {
+  if (!matches.length) return;
+
+  const jobs = await Job.find({ _id: { $in: matches.map((m) => m.jobId) } })
+    .select('_id job_title employer_name')
+    .lean();
+  const jobById = new Map(jobs.map((j) => [String(j._id), j]));
+
   for (const match of matches) {
-    const job = await Job.findById(match.jobId);
+    const job = jobById.get(String(match.jobId));
     emitToUser(userId.toString(), 'new_match', {
       matchId: match._id,
       jobId: job?._id,
@@ -91,9 +98,12 @@ async function notifyNewMatches(userId, matches) {
       employer: job?.employer_name,
       score: match.score
     });
-    match.notified = true;
-    await match.save();
   }
+
+  await Match.updateMany(
+    { _id: { $in: matches.map((m) => m._id) } },
+    { $set: { notified: true } }
+  );
 }
 
 /**
@@ -108,10 +118,6 @@ async function runMatchingForAllUsers() {
     results.push({ userId: resume.userId, newMatches: matches.length });
   }
   return results;
-}
-
-function escapeRegex(str) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 module.exports = { runMatchingForResume, runMatchingForAllUsers };

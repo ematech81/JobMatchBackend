@@ -93,7 +93,7 @@ async function cacheJobs(rawJobs = []) {
  * only falls back to a live JSearch call (and caches the result) on a
  * cache miss, to conserve the JSearch quota.
  */
-async function searchJobsByCountry(rawCountry, { page = 1, limit = 20 } = {}) {
+async function searchJobsByCountry(rawCountry, { page = 1, limit = 20, query = 'jobs' } = {}) {
   const countryCode = normalizeCountryToCode(rawCountry);
   if (!countryCode) {
     const err = new Error(`Unrecognized country: "${rawCountry}"`);
@@ -101,7 +101,12 @@ async function searchJobsByCountry(rawCountry, { page = 1, limit = 20 } = {}) {
     throw err;
   }
 
-  const cached = await Job.find({ country: countryCode })
+  // Only serve cache entries newer than the TTL — without this check a single
+  // stale/thin result set would be served indefinitely (Section 3.2's
+  // fetched_at exists precisely so the cache can expire).
+  const freshCutoff = new Date(Date.now() - jsearch.cacheTtlHours * 60 * 60 * 1000);
+
+  const cached = await Job.find({ country: countryCode, fetched_at: { $gte: freshCutoff } })
     .sort({ fetched_at: -1 })
     .limit(limit);
 
@@ -109,10 +114,28 @@ async function searchJobsByCountry(rawCountry, { page = 1, limit = 20 } = {}) {
     return { source: 'cache', jobs: cached };
   }
 
-  const rawJobs = await searchJobsLive({ query: 'jobs', country: countryCode, page });
-  const jobs = await cacheJobs(rawJobs);
+  // JSearch requires a non-empty `query`; 'jobs' is a placeholder for a
+  // country-only browse and is ignored as a keyword in fixture mode.
+  let jobs;
+  try {
+    const rawJobs = await searchJobsLive({ query, country: countryCode, page });
+    jobs = await cacheJobs(rawJobs);
+  } catch (err) {
+    // Upstream failed (quota exhausted, network, outage). Stale results beat
+    // no results, so fall back to expired cache entries if we have any.
+    console.error(`[JSearch] Refetch failed for ${countryCode}:`, err.message);
 
-  return { source: 'live', jobs: jobs.slice(0, limit) };
+    const stale = await Job.find({ country: countryCode }).sort({ fetched_at: -1 }).limit(limit);
+    if (stale.length) return { source: 'stale-cache', jobs: stale };
+
+    throw err;
+  }
+
+  // Report the true origin so callers can't mistake fixture data for live data.
+  return {
+    source: jsearch.dataSource === 'fixture' ? 'fixture' : 'live',
+    jobs: jobs.slice(0, limit)
+  };
 }
 
 module.exports = {

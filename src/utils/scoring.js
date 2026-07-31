@@ -1,16 +1,17 @@
-const { normalizeCountryToCode } = require('./countryCodes');
-
 /**
  * MVP keyword/skill overlap scoring.
  * Weighting (adjustable later per Section 6 open items):
- *  - Title match: 50%
- *  - Skill overlap: 35%
- *  - Location match: 15%
+ *  - Title match: 60%
+ *  - Skill overlap: 40%
+ *
+ * Location is deliberately absent: the guide treats preferred country as a
+ * filter, so matchingService excludes other countries before scoring. Scoring
+ * it too would add a constant to every surviving job — inflating all scores
+ * equally while distinguishing nothing.
  */
 const WEIGHTS = {
-  title: 0.5,
-  skills: 0.35,
-  location: 0.15
+  title: 0.6,
+  skills: 0.4
 };
 
 function normalize(str = '') {
@@ -45,29 +46,17 @@ function skillScore(skills = [], jobText = '') {
 }
 
 /**
- * Resumes store free-text countries ("Nigeria") while cached jobs store ISO
- * alpha-2 codes ("NG"), so both sides must be normalized before comparison.
- */
-function locationScore(preferredCountry, jobCountry) {
-  if (!preferredCountry || !jobCountry) return 0;
-  const preferred = normalizeCountryToCode(preferredCountry);
-  const job = normalizeCountryToCode(jobCountry);
-  if (!preferred || !job) return 0;
-  return preferred === job ? 1 : 0;
-}
-
-/**
  * Computes overall match score (0-100) between a resume and a job.
+ * Assumes the job already passed the preferred-country filter applied by
+ * matchingService — see the WEIGHTS note above.
  */
 function computeMatchScore(resume, job) {
   const jobText = `${job.job_title || ''} ${job.job_description || ''}`;
 
   const tScore = titleScore(resume.desiredTitles, job.job_title);
   const sScore = skillScore(resume.skills, jobText);
-  const lScore = locationScore(resume.preferredCountry, job.country);
 
-  const overall =
-    tScore * WEIGHTS.title + sScore * WEIGHTS.skills + lScore * WEIGHTS.location;
+  const overall = tScore * WEIGHTS.title + sScore * WEIGHTS.skills;
 
   return Math.round(overall * 100);
 }
