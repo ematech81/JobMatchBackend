@@ -38,27 +38,51 @@ function titleScore(desiredTitles = [], jobTitle = '') {
   return best; // 0..1
 }
 
-function skillScore(skills = [], jobText = '') {
-  if (!skills.length || !jobText) return 0;
+/**
+ * Returns which of the resume's skills actually appear in the job text.
+ * The names matter as much as the ratio: the UI shows them as the concrete
+ * reason a job was matched.
+ */
+function matchedSkills(skills = [], jobText = '') {
+  if (!skills.length || !jobText) return [];
   const text = normalize(jobText);
-  const matched = skills.filter((skill) => text.includes(normalize(skill)));
-  return matched.length / skills.length; // 0..1
+  return skills.filter((skill) => text.includes(normalize(skill)));
 }
 
 /**
- * Computes overall match score (0-100) between a resume and a job.
+ * Full breakdown of a resume/job match.
+ *
+ * The component scores are persisted alongside the total so clients can show
+ * *why* something matched without re-deriving it — previously the UI invented
+ * a breakdown by scaling the single overall score, which was not real data.
+ *
  * Assumes the job already passed the preferred-country filter applied by
  * matchingService — see the WEIGHTS note above.
  */
-function computeMatchScore(resume, job) {
+function computeMatchBreakdown(resume, job) {
   const jobText = `${job.job_title || ''} ${job.job_description || ''}`;
+  const resumeSkills = resume.skills || [];
 
   const tScore = titleScore(resume.desiredTitles, job.job_title);
-  const sScore = skillScore(resume.skills, jobText);
+  const matched = matchedSkills(resumeSkills, jobText);
+  const sScore = resumeSkills.length ? matched.length / resumeSkills.length : 0;
 
   const overall = tScore * WEIGHTS.title + sScore * WEIGHTS.skills;
 
-  return Math.round(overall * 100);
+  return {
+    score: Math.round(overall * 100),
+    titleScore: Math.round(tScore * 100),
+    skillScore: Math.round(sScore * 100),
+    matchedSkills: matched
+  };
 }
 
-module.exports = { computeMatchScore, tokenize, normalize };
+/**
+ * Overall match score (0-100) only. Thin wrapper kept for callers that do not
+ * need the breakdown.
+ */
+function computeMatchScore(resume, job) {
+  return computeMatchBreakdown(resume, job).score;
+}
+
+module.exports = { computeMatchScore, computeMatchBreakdown, tokenize, normalize };

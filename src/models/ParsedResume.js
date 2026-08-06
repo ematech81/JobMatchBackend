@@ -27,6 +27,9 @@ const parsedResumeSchema = new mongoose.Schema(
     education: [educationSchema],
     preferredCountry: String,
     source: { type: String, enum: ['affinda', 'generated', 'custom-parser'], required: true },
+    // Original upload filename (Path A only) so the UI can show which document
+    // is currently active. Null for resumes built through the guided Q&A.
+    originalFilename: { type: String, default: null },
     rawText: String // raw parsed text/backup, useful for re-parsing / PDF regeneration
   },
   { timestamps: true }

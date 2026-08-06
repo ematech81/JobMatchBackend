@@ -1,7 +1,7 @@
 const Job = require('../models/Job');
 const Match = require('../models/Match');
 const ParsedResume = require('../models/ParsedResume');
-const { computeMatchScore } = require('../utils/scoring');
+const { computeMatchBreakdown } = require('../utils/scoring');
 const { normalizeCountryToCode } = require('../utils/countryCodes');
 const { emitToUser } = require('./socketService');
 
@@ -19,7 +19,8 @@ async function runMatchingForResume(resume) {
   const newMatches = [];
 
   for (const job of candidateJobs) {
-    const score = computeMatchScore(resume, job);
+    const breakdown = computeMatchBreakdown(resume, job);
+    const { score } = breakdown;
     if (score < MIN_SCORE_THRESHOLD) continue;
 
     // Atomic upsert: a check-then-insert would race against concurrent runs
@@ -29,7 +30,12 @@ async function runMatchingForResume(resume) {
       const result = await Match.findOneAndUpdate(
         { userId: resume.userId, jobId: job._id },
         {
-          $set: { score },
+          $set: {
+            score,
+            titleScore: breakdown.titleScore,
+            skillScore: breakdown.skillScore,
+            matchedSkills: breakdown.matchedSkills
+          },
           $setOnInsert: { matchedAt: new Date(), notified: false }
         },
         { upsert: true, new: true, includeResultMetadata: true }

@@ -7,6 +7,7 @@ const {
   generateResumePdf
 } = require('../services/resumeGeneratorService');
 const { runMatchingForResume } = require('../services/matchingService');
+const { computeResumeStrength, totalExperienceMonths } = require('../utils/resumeStrength');
 
 /**
  * Path A: Upload existing resume (PDF/DOCX) -> Affinda parse -> canonical ParsedResume
@@ -26,7 +27,10 @@ exports.uploadResume = asyncHandler(async (req, res) => {
     });
   }
 
-  const resume = await upsertResumeForUser(req.user.id, canonical);
+  const resume = await upsertResumeForUser(req.user.id, {
+    ...canonical,
+    originalFilename: req.file.originalname
+  });
 
   await User.findByIdAndUpdate(req.user.id, {
     resumeSource: 'uploaded',
@@ -67,7 +71,14 @@ exports.generateResume = asyncHandler(async (req, res) => {
 exports.getMyResume = asyncHandler(async (req, res) => {
   const resume = await ParsedResume.findOne({ userId: req.user.id });
   if (!resume) return res.status(404).json({ message: 'No resume found' });
-  res.json({ resume });
+
+  // Derived fields travel with the resume so the dashboard does not have to
+  // reimplement the completeness rules the backend already owns.
+  res.json({
+    resume,
+    strength: computeResumeStrength(resume),
+    totalExperienceMonths: totalExperienceMonths(resume)
+  });
 });
 
 // Client-editable resume fields — `userId` and `source` are server-owned.
