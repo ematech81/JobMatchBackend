@@ -26,7 +26,11 @@ console.log(
 // Feature-gating keys: absent/placeholder values disable a feature rather
 // than the whole server, so warn loudly instead of exiting.
 const PLACEHOLDER = /^(your_|replace_|changeme)/i;
-const gated = [['AFFINDA_API_KEY', 'resume upload parsing (Path A)']];
+const gated = [
+  ['AFFINDA_API_KEY', 'resume upload parsing (Path A)'],
+  ['AFFINDA_WORKSPACE', 'resume upload parsing (Path A) — the Affinda workspace to upload into'],
+  ['AFFINDA_DOCUMENT_TYPE', 'resume upload parsing (Path A) — without it, extraction silently no-ops']
+];
 if (dataSource === 'live') {
   gated.push(['JSEARCH_API_KEY', 'job search + scheduled pulls']);
 }
@@ -58,10 +62,16 @@ module.exports = {
     cacheTtlHours: Number(process.env.JOB_CACHE_TTL_HOURS || 6)
   },
 
+  // Official Affinda API (not the RapidAPI marketplace listing) — a direct
+  // account with a workspace configured for Resume document types.
   affinda: {
     apiKey: process.env.AFFINDA_API_KEY,
-    apiHost: process.env.AFFINDA_API_HOST,
-    baseUrl: process.env.AFFINDA_BASE_URL
+    workspace: process.env.AFFINDA_WORKSPACE,
+    // Auto-classification silently no-ops (returns documentType: null and an
+    // empty data object, no error) on plain/sparse documents — pinning this
+    // explicitly is what actually makes extraction run.
+    documentType: process.env.AFFINDA_DOCUMENT_TYPE,
+    apiBase: process.env.AFFINDA_API_BASE || 'https://api.affinda.com'
   },
 
   claude: {

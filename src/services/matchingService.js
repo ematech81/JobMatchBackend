@@ -5,7 +5,14 @@ const { computeMatchBreakdown } = require('../utils/scoring');
 const { normalizeCountryToCode } = require('../utils/countryCodes');
 const { emitToUser } = require('./socketService');
 
-const MIN_SCORE_THRESHOLD = 40; // MVP cutoff, tune later
+// MVP cutoff, tune later. Was 40 with no recorded rationale beyond that
+// comment — against real scored data (a real resume, the NG fixture pool)
+// scores clustered as: one clear non-match at 1, a genuine-signal cluster at
+// 15-19 (title or skill overlap, mostly generic "Developer" titles), then a
+// jump to 31-32 for stronger title matches. 15 keeps the real outlier out
+// while surfacing every job with actual signal — 40 was excluding all of it,
+// including the two best matches in the pool (31, 32).
+const MIN_SCORE_THRESHOLD = 15;
 
 /**
  * Runs matching for a single resume against the cached jobs collection.

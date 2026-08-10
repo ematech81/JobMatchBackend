@@ -1,53 +1,93 @@
-const axios = require('axios');
-const FormData = require('form-data');
+const { Readable } = require('stream');
+const { AffindaAPI, AffindaCredential } = require('@affinda/affinda');
 const { affinda } = require('../config/env');
 
+const credential = new AffindaCredential(affinda.apiKey);
+const client = new AffindaAPI(credential, affinda.apiBase);
+
 /**
- * Sends a resume file buffer to Affinda (via RapidAPI) for parsing.
- * Falls back gracefully — caller should catch and use a fallback parser if needed.
+ * Sends a resume file buffer to Affinda's official API (not the RapidAPI
+ * marketplace listing) for parsing, into the workspace's "Resume Parser"
+ * document type. `documentType` is pinned explicitly — auto-classification
+ * silently no-ops on plain/sparse documents (returns documentType: null and
+ * an empty data object, no error), so extraction never runs without it.
+ * `compact: true` strips Affinda's raw/confidence/bounding-box wrapper
+ * around every field, leaving just the parsed values.
  */
 async function parseResumeWithAffinda(fileBuffer, filename) {
-  const form = new FormData();
-  form.append('file', fileBuffer, filename);
+  // The SDK's own example reads from fs.createReadStream, which carries a
+  // filename via its `.path`. A buffer-backed stream doesn't, so `fileName`
+  // is passed explicitly instead.
+  const file = Readable.from(fileBuffer);
 
-  const response = await axios.post(`${affinda.baseUrl}/resume/parse`, form, {
-    headers: {
-      ...form.getHeaders(),
-      'X-RapidAPI-Key': affinda.apiKey,
-      'X-RapidAPI-Host': affinda.apiHost
-    },
-    timeout: 30000
+  const doc = await client.createDocument({
+    file,
+    fileName: filename,
+    workspace: affinda.workspace,
+    documentType: affinda.documentType,
+    // The generated client serializes form fields as strings — a JS boolean
+    // here throws ("options.compact ... must be of type string") even
+    // though the field is semantically a boolean.
+    compact: 'true'
   });
 
-  return mapAffindaToCanonical(response.data);
+  return mapAffindaToCanonical(doc);
 }
 
 /**
- * Maps Affinda's raw response into our canonical ParsedResume shape.
- * NOTE: Exact field names depend on Affinda's actual response schema —
- * adjust mapping once real sample responses are available.
+ * Maps Affinda's compact response for the "Resume Parser" document type
+ * (extractor "resume-v4" / "Resume (NextGen)") into our canonical
+ * ParsedResume shape. Confirmed against a real response from this
+ * workspace's own document type — NOT the generic example Affinda's agent
+ * gave earlier, which turned out to be a different document type's schema
+ * (that one used candidateNameFirst/candidateNameFamily and a flat `skill`
+ * string array; this one uses firstName/familyName and skill *objects*).
  */
-function mapAffindaToCanonical(affindaData) {
-  const data = affindaData?.data || affindaData || {};
+function mapAffindaToCanonical(doc) {
+  const data = doc?.data || {};
 
-  const fullName = data.name?.raw || data.name || 'Unknown';
+  const fullName =
+    [data.candidateName?.firstName, data.candidateName?.middleName, data.candidateName?.familyName]
+      .filter(Boolean)
+      .join(' ') || 'Unknown';
 
-  const skills = (data.skills || []).map((s) => (typeof s === 'string' ? s : s.name)).filter(Boolean);
+  // Skills come back as EMSI-classified objects, not plain strings — and the
+  // same skill can be detected from multiple resume sections (e.g. once
+  // from workExperience, once from education), so de-dupe by name.
+  const skillNames = (data.skill || []).map((s) => s.name).filter(Boolean);
+  const skills = [...new Set(skillNames)];
 
-  const desiredTitles = data.profession ? [data.profession] : [];
-
-  const experience = (data.workExperience || data.work_experience || []).map((exp) => ({
-    title: exp.jobTitle || exp.job_title || '',
-    company: exp.organization || exp.company || '',
-    durationMonths: computeDurationMonths(exp.dates?.startDate, exp.dates?.endDate)
+  const experience = (data.workExperience || []).map((exp) => ({
+    title: exp.workExperienceJobTitle || '',
+    company: exp.workExperienceOrganization || '',
+    // Affinda computes this itself (handles "isCurrent" internally) —
+    // no need to parse dates ourselves.
+    durationMonths: exp.workExperienceDates?.durationInMonths ?? 0
   }));
 
   const education = (data.education || []).map((edu) => ({
-    degree: edu.accreditation?.education || edu.degree || '',
-    institution: edu.organization || edu.institution || ''
+    degree: edu.educationAccreditation || edu.educationLevel?.label || '',
+    institution: edu.educationOrganization || ''
   }));
 
-  const preferredCountry = data.location?.country || null;
+  // Both candidates are kept, not just one — matchingService's titleScore
+  // takes the best overlap across every entry in desiredTitles, so adding a
+  // second candidate can only raise a job's score, never lower it.
+  //
+  // `objective` is Affinda's own extraction of stated career intent (e.g.
+  // "Seeking a Software Engineer role..." -> "Engineer role"), which lines
+  // up with job-posting titles far better than a founder's most recent role
+  // ("Founder and Solo Developer" shares almost no tokens with real
+  // postings) — but Affinda's extraction can itself drop qualifying words
+  // ("Software"), so the most-recent-role title stays in the mix too rather
+  // than being replaced outright.
+  const desiredTitles = [data.objective, experience[0]?.title].filter(Boolean);
+
+  // countryCode (e.g. "US") matches the ISO-ish codes the rest of the app's
+  // country matching/filtering already expects, unlike the full country
+  // name. Frequently null — this workspace doesn't always resolve a
+  // top-level candidate location.
+  const preferredCountry = data.location?.countryCode || data.location?.country || null;
 
   return {
     fullName,
@@ -57,18 +97,8 @@ function mapAffindaToCanonical(affindaData) {
     education,
     preferredCountry,
     source: 'affinda',
-    rawText: JSON.stringify(affindaData)
+    rawText: data.rawText || JSON.stringify(doc)
   };
-}
-
-function computeDurationMonths(start, end) {
-  if (!start) return 0;
-  const startDate = new Date(start);
-  const endDate = end ? new Date(end) : new Date();
-  const months =
-    (endDate.getFullYear() - startDate.getFullYear()) * 12 +
-    (endDate.getMonth() - startDate.getMonth());
-  return Math.max(months, 0);
 }
 
 module.exports = { parseResumeWithAffinda, mapAffindaToCanonical };

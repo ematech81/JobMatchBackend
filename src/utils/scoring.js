@@ -39,14 +39,26 @@ function titleScore(desiredTitles = [], jobTitle = '') {
 }
 
 /**
+ * Affinda (and similarly-shaped parsers) canonicalize skill names with a
+ * disambiguating suffix — "Node.js (Javascript Library)", "Git (Version
+ * Control System)" — that real job postings never write out verbatim; they
+ * just say "Node.js" or "Git". Left unstripped, this was silently zeroing
+ * out most skill matches regardless of true overlap.
+ */
+function stripQualifier(skill = '') {
+  return skill.replace(/\s*\([^)]*\)\s*$/, '').trim();
+}
+
+/**
  * Returns which of the resume's skills actually appear in the job text.
  * The names matter as much as the ratio: the UI shows them as the concrete
- * reason a job was matched.
+ * reason a job was matched — original names are returned, the qualifier is
+ * only stripped for the comparison itself.
  */
 function matchedSkills(skills = [], jobText = '') {
   if (!skills.length || !jobText) return [];
   const text = normalize(jobText);
-  return skills.filter((skill) => text.includes(normalize(skill)));
+  return skills.filter((skill) => text.includes(normalize(stripQualifier(skill))));
 }
 
 /**
