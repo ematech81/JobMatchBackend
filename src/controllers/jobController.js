@@ -8,15 +8,20 @@ const Job = require('../models/Job');
  * Cache-first country search, independent of resume matching.
  */
 exports.searchByCountry = asyncHandler(async (req, res) => {
-  const { country, page = 1, limit = 20 } = req.query;
+  const { country, page = 1, limit = 20, jobType, datePosted } = req.query;
 
   if (!country) {
     return res.status(400).json({ message: 'country query param is required' });
   }
 
+  // Express parses a single `?jobType=X` as a string and repeats
+  // (`?jobType=X&jobType=Y`) as an array — normalize to always-array.
+  const jobTypes = jobType ? (Array.isArray(jobType) ? jobType : [jobType]) : [];
+
   const { source, jobs } = await searchJobsByCountry(country, {
     page: Number(page),
-    limit: Number(limit)
+    limit: Number(limit),
+    filters: { jobTypes, datePosted }
   });
 
   res.json({ source, count: jobs.length, jobs });

@@ -27,7 +27,7 @@ exports.register = asyncHandler(async (req, res) => {
   const user = await User.create({
     email: email.toLowerCase(),
     passwordHash,
-    fullName: fullName || null,
+    fullName: fullName?.trim() || null,
     preferredCountry: preferredCountry || null
   });
 
@@ -64,6 +64,7 @@ exports.login = asyncHandler(async (req, res) => {
     user: {
       id: user._id,
       email: user.email,
+      fullName: user.fullName,
       preferredCountry: user.preferredCountry,
       resumeSource: user.resumeSource,
       resumeId: user.resumeId
