@@ -29,7 +29,8 @@ const PLACEHOLDER = /^(your_|replace_|changeme)/i;
 const gated = [
   ['AFFINDA_API_KEY', 'resume upload parsing (Path A)'],
   ['AFFINDA_WORKSPACE', 'resume upload parsing (Path A) — the Affinda workspace to upload into'],
-  ['AFFINDA_DOCUMENT_TYPE', 'resume upload parsing (Path A) — without it, extraction silently no-ops']
+  ['AFFINDA_DOCUMENT_TYPE', 'resume upload parsing (Path A) — without it, extraction silently no-ops'],
+  ['KORAPAY_SECRET_KEY', 'subscription checkout — korapayService stays stubbed without it']
 ];
 if (dataSource === 'live') {
   gated.push(['JSEARCH_API_KEY', 'job search + scheduled pulls']);
@@ -76,6 +77,15 @@ module.exports = {
 
   claude: {
     apiKey: process.env.CLAUDE_API_KEY
+  },
+
+  // Stubbed until the real key is provided — see korapayService.js. Absent
+  // key means checkout is recorded locally (pending Subscription row) but no
+  // real charge is ever initiated.
+  korapay: {
+    secretKey: process.env.KORAPAY_SECRET_KEY,
+    publicKey: process.env.KORAPAY_PUBLIC_KEY,
+    baseUrl: process.env.KORAPAY_BASE_URL || 'https://api.korapay.com'
   },
 
   cron: {

@@ -93,15 +93,23 @@ async function cacheJobs(rawJobs = []) {
   return Job.find({ job_id: { $in: jobIds } }).sort({ fetched_at: -1 });
 }
 
+// The live API isn't consistent about which dash character it uses for the
+// same value — confirmed real postings stored as both "Full-time" (hyphen,
+// U+002D) and "Full–time" (en dash, U+2013). Left unnormalized, the en-dash
+// postings would silently never match the "Full-time" filter.
+function normalizeDashes(str) {
+  return str.replace(/[‐-―]/g, '-');
+}
+
 /**
  * "Contract" in the filter UI needs to match the fixture/JSearch spelling
  * "Contractor" — everything else is an exact, case-sensitive match against
- * the stored value.
+ * the stored value (once dashes are normalized).
  */
 function matchesEmploymentType(job, uiType) {
-  const type = (job.job_employment_type || '').toLowerCase();
+  const type = normalizeDashes((job.job_employment_type || '').toLowerCase());
   if (uiType === 'Contract') return type.includes('contract');
-  return type === uiType.toLowerCase();
+  return type === normalizeDashes(uiType.toLowerCase());
 }
 
 const DATE_POSTED_DAYS = {
@@ -193,9 +201,23 @@ async function searchJobsByCountry(rawCountry, { page = 1, limit = 20, query = '
   };
 }
 
+/**
+ * "No country selected yet" browse — shows whatever's already cached across
+ * every country instead of an empty prompt. Cache-only: there's no single
+ * live JSearch call that means "every country," and calling it once per
+ * supported country just to render a default view would burn quota fast for
+ * no real benefit — this reads whatever the cron pull / on-demand country
+ * searches have already populated.
+ */
+async function searchAllCountries({ limit = 20, filters = {} } = {}) {
+  const cached = await Job.find({}).sort({ fetched_at: -1 });
+  return { source: 'cache', jobs: applyFilters(cached, filters).slice(0, limit) };
+}
+
 module.exports = {
   mapJSearchResultToJob,
   searchJobsLive,
   cacheJobs,
-  searchJobsByCountry
+  searchJobsByCountry,
+  searchAllCountries
 };

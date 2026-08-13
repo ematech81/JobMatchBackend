@@ -3,6 +3,7 @@ const Match = require('../models/Match');
 const Job = require('../models/Job');
 const ParsedResume = require('../models/ParsedResume');
 const { runMatchingForResume } = require('../services/matchingService');
+const { normalizeCountryToCode } = require('../utils/countryCodes');
 
 /**
  * GET /api/matches?sort=score|recent&limit=N
@@ -39,6 +40,27 @@ exports.rerunMyMatches = asyncHandler(async (req, res) => {
   res.json({ newMatchesCount: matches.length });
 });
 
+
+/**
+ * Powers the post-onboarding "scanning" screen. Both numbers are real: a
+ * fresh matching run (same as /rerun) plus the actual candidate pool it
+ * scanned — the screen's animation is simulated, but nothing it displays
+ * afterward is invented data.
+ */
+exports.getScanSummary = asyncHandler(async (req, res) => {
+  const resume = await ParsedResume.findOne({ userId: req.user.id });
+  if (!resume) return res.status(404).json({ message: 'No resume found' });
+
+  await runMatchingForResume(resume);
+  const matchCount = await Match.countDocuments({ userId: req.user.id });
+
+  const countryCode = normalizeCountryToCode(resume.preferredCountry || '');
+  const scannedCount = countryCode
+    ? await Job.countDocuments({ country: countryCode })
+    : await Job.countDocuments();
+
+  res.json({ scannedCount, matchCount });
+});
 
 exports.getMatchForJob = asyncHandler(async (req, res) => {
   const job = await Job.findOne({ job_id: req.params.jobId });

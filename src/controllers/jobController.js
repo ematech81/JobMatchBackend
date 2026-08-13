@@ -1,28 +1,25 @@
 const asyncHandler = require('../utils/asyncHandler');
-const { searchJobsByCountry } = require('../services/jsearchService');
+const { searchJobsByCountry, searchAllCountries } = require('../services/jsearchService');
 const User = require('../models/User');
 const Job = require('../models/Job');
 
 /**
  * GET /api/jobs/search?country=Nigeria&page=1
- * Cache-first country search, independent of resume matching.
+ * Cache-first country search, independent of resume matching. `country` is
+ * optional — omitting it browses whatever's cached across every country
+ * (see searchAllCountries) rather than erroring.
  */
 exports.searchByCountry = asyncHandler(async (req, res) => {
   const { country, page = 1, limit = 20, jobType, datePosted } = req.query;
 
-  if (!country) {
-    return res.status(400).json({ message: 'country query param is required' });
-  }
-
   // Express parses a single `?jobType=X` as a string and repeats
   // (`?jobType=X&jobType=Y`) as an array — normalize to always-array.
   const jobTypes = jobType ? (Array.isArray(jobType) ? jobType : [jobType]) : [];
+  const filters = { jobTypes, datePosted };
 
-  const { source, jobs } = await searchJobsByCountry(country, {
-    page: Number(page),
-    limit: Number(limit),
-    filters: { jobTypes, datePosted }
-  });
+  const { source, jobs } = country
+    ? await searchJobsByCountry(country, { page: Number(page), limit: Number(limit), filters })
+    : await searchAllCountries({ limit: Number(limit), filters });
 
   res.json({ source, count: jobs.length, jobs });
 });
@@ -38,6 +35,14 @@ exports.saveJob = asyncHandler(async (req, res) => {
 exports.getSavedJobs = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user.id).populate('savedJobs');
   res.json({ jobs: user?.savedJobs || [] });
+});
+
+exports.unsaveJob = asyncHandler(async (req, res) => {
+  const job = await findJobByEitherId(req.params.jobId);
+  if (!job) return res.status(404).json({ message: 'Job not found' });
+
+  await User.findByIdAndUpdate(req.user.id, { $pull: { savedJobs: job._id } });
+  res.json({ message: 'Job removed' });
 });
 
 

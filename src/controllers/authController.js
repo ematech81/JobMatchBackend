@@ -77,3 +77,28 @@ exports.getMe = asyncHandler(async (req, res) => {
   if (!user) return res.status(404).json({ message: 'User not found' });
   res.json({ user });
 });
+
+// Account-level fields only — email is deliberately excluded (changing it
+// has real security implications like re-verification that this endpoint
+// doesn't handle) and there's no phone field on the User model yet.
+const EDITABLE_ACCOUNT_FIELDS = ['fullName', 'preferredCountry'];
+
+exports.updateMe = asyncHandler(async (req, res) => {
+  const updates = {};
+  for (const field of EDITABLE_ACCOUNT_FIELDS) {
+    if (req.body[field] !== undefined) updates[field] = req.body[field];
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ message: 'No editable fields provided' });
+  }
+  if (updates.fullName !== null) updates.fullName = updates.fullName?.trim() || null;
+
+  const user = await User.findByIdAndUpdate(req.user.id, { $set: updates }, {
+    new: true,
+    runValidators: true
+  }).select('-passwordHash');
+
+  if (!user) return res.status(404).json({ message: 'User not found' });
+  res.json({ user });
+});
