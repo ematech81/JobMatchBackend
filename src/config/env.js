@@ -80,14 +80,22 @@ module.exports = {
     apiKey: process.env.CLAUDE_API_KEY
   },
 
-  // Stubbed until the real key is provided — see korapayService.js. Absent
-  // key means checkout is recorded locally (pending Subscription row) but no
-  // real charge is ever initiated.
+  // Absent secretKey means checkout is recorded locally (pending
+  // Subscription row) but no real charge is ever initiated — see
+  // korapayService.js.
   korapay: {
     secretKey: process.env.KORAPAY_SECRET_KEY,
     publicKey: process.env.KORAPAY_PUBLIC_KEY,
+    // Extra shared-secret layer on the webhook URL, on top of (not instead
+    // of) KoraPay's documented HMAC signature check — see korapayService.js.
+    webhookSecret: process.env.KORAPAY_WEBHOOK_SECRET,
     baseUrl: process.env.KORAPAY_BASE_URL || 'https://api.korapay.com'
   },
+
+  // Where KoraPay's servers reach this API for webhooks — must be a real
+  // public URL (a tunnel like ngrok locally) for webhook delivery to work at
+  // all; KoraPay cannot reach "localhost".
+  apiPublicUrl: process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 5000}`,
 
   // Stubbed until a real key/verified sender exist — see emailService.js.
   // Absent key means notifyNewMatches logs and skips the send instead of

@@ -21,7 +21,12 @@ const userSchema = new mongoose.Schema(
     // address, same reasoning as passwordHash.
     emailVerified: { type: Boolean, default: false },
     emailVerificationTokenHash: { type: String, default: null, select: false },
-    emailVerificationTokenExpires: { type: Date, default: null, select: false }
+    emailVerificationTokenExpires: { type: Date, default: null, select: false },
+
+    // Same hashed-token pattern as email verification, for the same reason —
+    // a DB read alone must not be enough to reset someone else's password.
+    passwordResetTokenHash: { type: String, default: null, select: false },
+    passwordResetTokenExpires: { type: Date, default: null, select: false }
   },
   { timestamps: true }
 );

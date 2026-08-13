@@ -7,7 +7,7 @@ const Match = require('../models/Match');
 const Subscription = require('../models/Subscription');
 const { jwtSecret, jwtExpiresIn } = require('../config/env');
 const asyncHandler = require('../utils/asyncHandler');
-const { sendEmail, verificationEmail } = require('../services/emailService');
+const { sendEmail, verificationEmail, passwordResetEmail } = require('../services/emailService');
 
 function signToken(user) {
   return jwt.sign({ id: user._id, email: user.email }, jwtSecret, {
@@ -276,4 +276,59 @@ exports.resendVerificationEmail = asyncHandler(async (req, res) => {
 
   await issueAndSendVerificationEmail(user);
   res.json({ message: 'Verification email sent' });
+});
+
+const RESET_TOKEN_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Always responds the same way whether or not the email exists — a
+ * different response for "no account" vs "email sent" would let anyone
+ * enumerate registered emails by trying them here. No auth (you're logged
+ * out precisely because you forgot your password).
+ */
+exports.forgotPassword = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ message: 'Email is required' });
+
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (user) {
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    user.passwordResetTokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    user.passwordResetTokenExpires = new Date(Date.now() + RESET_TOKEN_TTL_MS);
+    await user.save();
+
+    const { subject, htmlContent } = passwordResetEmail({ fullName: user.fullName, resetToken: rawToken });
+    sendEmail({ to: user.email, toName: user.fullName, subject, htmlContent }).catch((err) =>
+      console.error('[Auth] Failed to send password reset email:', err.message)
+    );
+  }
+
+  res.json({ message: 'If that email is registered, a reset link is on its way.' });
+});
+
+exports.resetPassword = asyncHandler(async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) {
+    return res.status(400).json({ message: 'Token and new password are required' });
+  }
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    return res.status(400).json({ message: `New password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const user = await User.findOne({
+    passwordResetTokenHash: tokenHash,
+    passwordResetTokenExpires: { $gt: new Date() }
+  }).select('+passwordResetTokenHash +passwordResetTokenExpires');
+
+  if (!user) {
+    return res.status(400).json({ message: 'This reset link is invalid or has expired.' });
+  }
+
+  user.passwordHash = await bcrypt.hash(newPassword, 10);
+  user.passwordResetTokenHash = null;
+  user.passwordResetTokenExpires = null;
+  await user.save();
+
+  res.json({ message: 'Password reset' });
 });

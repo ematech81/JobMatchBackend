@@ -10,7 +10,9 @@ const {
   deleteAccount,
   exportMyData,
   verifyEmail,
-  resendVerificationEmail
+  resendVerificationEmail,
+  forgotPassword,
+  resetPassword
 } = require('../controllers/authController');
 
 router.post('/register', register);
@@ -23,5 +25,9 @@ router.get('/me/export', auth, exportMyData);
 // No auth — the token is the proof, not the session (see verifyEmail).
 router.post('/verify-email', verifyEmail);
 router.post('/resend-verification', auth, resendVerificationEmail);
+// No auth on either — you're logged out precisely because you forgot your
+// password; the reset token itself is what proves it's really you.
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 
 module.exports = router;

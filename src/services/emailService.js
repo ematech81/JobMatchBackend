@@ -93,8 +93,27 @@ function verificationEmail({ fullName, verifyToken }) {
   };
 }
 
+/**
+ * resetToken is the raw, unhashed token — same rule as verifyToken above,
+ * only ever exists here and in the link itself, never persisted as-is.
+ */
+function passwordResetEmail({ fullName, resetToken }) {
+  const greeting = fullName ? `Hi ${fullName.split(' ')[0]},` : 'Hi,';
+  const resetUrl = `${clientUrl}/reset-password?token=${resetToken}`;
+
+  return {
+    subject: 'Reset your JobMatch password',
+    htmlContent: `
+      <p>${greeting}</p>
+      <p>We got a request to reset your JobMatch password. Click below to choose a new one.</p>
+      <p><a href="${resetUrl}">Reset my password</a></p>
+      <p style="color:#64748B;font-size:12px;">This link expires in 1 hour. If you didn't request this, you can ignore this email — your password won't change.</p>
+    `
+  };
+}
+
 function escapeHtml(str = '') {
   return str.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-module.exports = { sendEmail, newMatchesEmail, verificationEmail };
+module.exports = { sendEmail, newMatchesEmail, verificationEmail, passwordResetEmail };

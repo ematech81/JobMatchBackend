@@ -24,6 +24,19 @@ exports.searchByCountry = asyncHandler(async (req, res) => {
   res.json({ source, count: jobs.length, jobs });
 });
 
+/**
+ * GET /api/jobs/stats — public, deliberately. Aggregate counts only, no
+ * listings, so it doesn't reopen the "Find Jobs shows real data to anyone"
+ * hole that requireResume/requireActiveSubscription exist to close — a
+ * total count can't be turned back into the underlying job data. Used by
+ * the homepage's live-stats section instead of a made-up number.
+ */
+exports.getPublicStats = asyncHandler(async (req, res) => {
+  const [totalJobs, countries] = await Promise.all([Job.countDocuments(), Job.distinct('country')]);
+  const countryCount = countries.filter(Boolean).length;
+  res.json({ totalJobs, countryCount });
+});
+
 exports.saveJob = asyncHandler(async (req, res) => {
   const job = await findJobByEitherId(req.params.jobId);
   if (!job) return res.status(404).json({ message: 'Job not found' });

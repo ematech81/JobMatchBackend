@@ -5,12 +5,18 @@ const requireResume = require('../middleware/requireResume');
 const requireActiveSubscription = require('../middleware/requireActiveSubscription');
 const {
   searchByCountry,
+  getPublicStats,
   saveJob,
   unsaveJob,
   getSavedJobs,
   getJobById,
   getSimilarJobs
 } = require('../controllers/jobController');
+
+// Must come before /:jobId — Express would otherwise match "stats" as a
+// jobId and route it into getJobById instead. Public and deliberately so
+// (see getPublicStats): it's a count, not a listing.
+router.get('/stats', getPublicStats);
 
 // Every route here returns real job data — all of it requires a completed
 // resume AND an active subscription, not just being logged in. These used
