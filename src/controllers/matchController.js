@@ -3,6 +3,7 @@ const Match = require('../models/Match');
 const Job = require('../models/Job');
 const ParsedResume = require('../models/ParsedResume');
 const { runMatchingForResume } = require('../services/matchingService');
+const { ensureFreshJobsForCountry } = require('../services/jsearchService');
 const { normalizeCountryToCode } = require('../utils/countryCodes');
 
 /**
@@ -51,10 +52,16 @@ exports.getScanSummary = asyncHandler(async (req, res) => {
   const resume = await ParsedResume.findOne({ userId: req.user.id });
   if (!resume) return res.status(404).json({ message: 'No resume found' });
 
+  // Warm the cache for this resume's country before counting/matching — a
+  // brand-new user whose country nobody has searched yet (and that isn't in
+  // the cron's fixed commonCountries list) would otherwise be scored against
+  // an empty pool and see a real, not just cosmetic, zero.
+  const countryCode = normalizeCountryToCode(resume.preferredCountry || '');
+  await ensureFreshJobsForCountry(countryCode);
+
   await runMatchingForResume(resume);
   const matchCount = await Match.countDocuments({ userId: req.user.id });
 
-  const countryCode = normalizeCountryToCode(resume.preferredCountry || '');
   const scannedCount = countryCode
     ? await Job.countDocuments({ country: countryCode })
     : await Job.countDocuments();

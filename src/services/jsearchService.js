@@ -202,6 +202,37 @@ async function searchJobsByCountry(rawCountry, { page = 1, limit = 20, query = '
 }
 
 /**
+ * Ensures the Job cache has a fresh (within-TTL) entry for this country,
+ * fetching live and caching it if not — the same cache-miss step
+ * searchJobsByCountry does, extracted so callers that only need the *side
+ * effect* (a warmed cache), not a filtered/paginated result, don't have to
+ * go through it. This is what getScanSummary and buildCandidateJobQuery use
+ * so a brand-new user isn't scored/counted against whatever happened to
+ * already be cached for their country (which used to depend entirely on
+ * someone having coincidentally browsed /jobs/search for it before, or the
+ * cron's fixed commonCountries list including it) — without this, a cold
+ * country meant a real user got real zero matches, not just a low display
+ * number.
+ */
+async function ensureFreshJobsForCountry(countryCode, { query = 'jobs' } = {}) {
+  if (!countryCode) return;
+
+  const freshCutoff = new Date(Date.now() - jsearch.cacheTtlHours * 60 * 60 * 1000);
+  const freshCount = await Job.countDocuments({ country: countryCode, fetched_at: { $gte: freshCutoff } });
+  if (freshCount > 0) return;
+
+  try {
+    const rawJobs = await searchJobsLive({ query, country: countryCode });
+    await cacheJobs(rawJobs);
+  } catch (err) {
+    // Upstream failed (quota exhausted, network, outage) — leave whatever's
+    // already cached (fresh or stale) as-is rather than throwing; the
+    // caller's own query just runs against what exists.
+    console.error(`[JSearch] Cache warm failed for ${countryCode}:`, err.message);
+  }
+}
+
+/**
  * "No country selected yet" browse — shows whatever's already cached across
  * every country instead of an empty prompt. Cache-only: there's no single
  * live JSearch call that means "every country," and calling it once per
@@ -219,5 +250,6 @@ module.exports = {
   searchJobsLive,
   cacheJobs,
   searchJobsByCountry,
-  searchAllCountries
+  searchAllCountries,
+  ensureFreshJobsForCountry
 };

@@ -17,7 +17,7 @@ const PLANS = {
     currency: 'USD',
     interval: 'trial',
     trialDays: 7,
-    description: 'Full access for a week, then $5 charges once.'
+    description: 'Full access for 7 days. $5 charged immediately, one-time.'
   },
   monthly: {
     id: 'monthly',

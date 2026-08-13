@@ -1,9 +1,12 @@
 const Job = require('../models/Job');
 const Match = require('../models/Match');
 const ParsedResume = require('../models/ParsedResume');
+const User = require('../models/User');
 const { computeMatchBreakdown } = require('../utils/scoring');
 const { normalizeCountryToCode } = require('../utils/countryCodes');
+const { ensureFreshJobsForCountry } = require('./jsearchService');
 const { emitToUser } = require('./socketService');
+const { sendEmail, newMatchesEmail } = require('./emailService');
 
 // MVP cutoff, tune later. Was 40 with no recorded rationale beyond that
 // comment — against real scored data (a real resume, the NG fixture pool)
@@ -82,17 +85,27 @@ async function buildCandidateJobQuery(resume) {
     return Job.find().sort({ fetched_at: -1 }).limit(200);
   }
 
+  // Without this, a country the cron's fixed commonCountries list doesn't
+  // cover (and nobody has browsed /jobs/search for) would score this resume
+  // against zero candidates — real missed matches, not just a low count
+  // somewhere in the UI. Cheap no-op if the cache is already fresh (the
+  // common case for every resume after the first one in a given country).
+  await ensureFreshJobsForCountry(countryCode);
+
   // MVP cap: scores the most recently fetched jobs in-country. Revisit when a
   // single market outgrows this (Section 3.4 flags embeddings as the v2 path).
   return Job.find({ country: countryCode }).sort({ fetched_at: -1 }).limit(500);
 }
 
 /**
- * Emits a socket.io event per new match and marks them notified.
+ * Emits a socket.io event per new match, sends one digest email (not one
+ * per match — a first scan or a big cache refresh can surface a dozen at
+ * once, and a dozen separate emails just gets filtered as spam) if the user
+ * has email notifications on, and marks them notified.
  *
  * Job lookups and the notified flag are batched: doing both per-match meant
  * 2N sequential round-trips, which the cron's all-users run multiplies by the
- * user count. This is 2 queries regardless of match count.
+ * user count. This is a fixed number of queries regardless of match count.
  */
 async function notifyNewMatches(userId, matches) {
   if (!matches.length) return;
@@ -102,15 +115,30 @@ async function notifyNewMatches(userId, matches) {
     .lean();
   const jobById = new Map(jobs.map((j) => [String(j._id), j]));
 
-  for (const match of matches) {
+  const matchPayloads = matches.map((match) => {
     const job = jobById.get(String(match.jobId));
-    emitToUser(userId.toString(), 'new_match', {
+    return {
       matchId: match._id,
       jobId: job?._id,
       jobTitle: job?.job_title,
       employer: job?.employer_name,
       score: match.score
-    });
+    };
+  });
+
+  for (const payload of matchPayloads) {
+    emitToUser(userId.toString(), 'new_match', payload);
+  }
+
+  // Socket delivery and email are independent — a user with the app closed
+  // still gets the email; a failed/unconfigured email must not stop the
+  // in-app notification or the notified flag below.
+  const user = await User.findById(userId).select('email fullName emailNotifications').lean();
+  if (user?.emailNotifications && user.email) {
+    // sendEmail never throws (see emailService.js) — fire-and-forget so a
+    // slow provider response doesn't hold up the caller.
+    const { subject, htmlContent } = newMatchesEmail({ fullName: user.fullName, matches: matchPayloads });
+    sendEmail({ to: user.email, toName: user.fullName, subject, htmlContent });
   }
 
   await Match.updateMany(

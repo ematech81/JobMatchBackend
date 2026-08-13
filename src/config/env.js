@@ -30,7 +30,8 @@ const gated = [
   ['AFFINDA_API_KEY', 'resume upload parsing (Path A)'],
   ['AFFINDA_WORKSPACE', 'resume upload parsing (Path A) — the Affinda workspace to upload into'],
   ['AFFINDA_DOCUMENT_TYPE', 'resume upload parsing (Path A) — without it, extraction silently no-ops'],
-  ['KORAPAY_SECRET_KEY', 'subscription checkout — korapayService stays stubbed without it']
+  ['KORAPAY_SECRET_KEY', 'subscription checkout — korapayService stays stubbed without it'],
+  ['BREVO_API_KEY', 'new-match email notifications — emailService stays stubbed without it']
 ];
 if (dataSource === 'live') {
   gated.push(['JSEARCH_API_KEY', 'job search + scheduled pulls']);
@@ -86,6 +87,16 @@ module.exports = {
     secretKey: process.env.KORAPAY_SECRET_KEY,
     publicKey: process.env.KORAPAY_PUBLIC_KEY,
     baseUrl: process.env.KORAPAY_BASE_URL || 'https://api.korapay.com'
+  },
+
+  // Stubbed until a real key/verified sender exist — see emailService.js.
+  // Absent key means notifyNewMatches logs and skips the send instead of
+  // throwing; matching itself still runs and the socket/in-app notification
+  // still fires either way.
+  brevo: {
+    apiKey: process.env.BREVO_API_KEY,
+    senderEmail: process.env.BREVO_SENDER_EMAIL || 'notifications@jobmatch.com',
+    senderName: process.env.BREVO_SENDER_NAME || 'JobMatch'
   },
 
   cron: {
