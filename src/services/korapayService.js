@@ -1,28 +1,24 @@
 const axios = require('axios');
 const crypto = require('crypto');
-const { korapay, apiPublicUrl, clientUrl } = require('../config/env');
+const { korapay, clientUrl } = require('../config/env');
 
 /**
  * Real KoraPay integration (developers.korapay.com/docs/checkout-redirect,
- * .../docs/webhooks). Two things worth knowing:
+ * .../docs/webhooks).
  *
- * - The webhook query token (?token=) is an extra layer on top of KoraPay's
- *   own documented signature check, not a replacement for it — their docs
- *   are explicit that signature verification uses the account secret key,
- *   not a separate webhook secret, so verifyWebhookSignature below signs
- *   with `korapay.secretKey` regardless of whether a webhookSecret is set.
- * - notification_url must be a URL KoraPay's servers can actually reach.
- *   `apiPublicUrl` defaults to localhost, which does not work for real
- *   webhook delivery without a tunnel (ngrok, etc.) — see env.js.
+ * No `notification_url` here on purpose: this account routes all webhooks
+ * for every app through one shared router (korapay-webhook-router),
+ * registered once at the KoraPay-dashboard level, not per-transaction. If
+ * KoraPay also called a per-transaction notification_url directly, that
+ * call would bypass the router entirely and get rejected by this app's own
+ * x-router-secret check (see subscriptionController.handleWebhook) — so not
+ * sending one avoids a real duplicate/broken-delivery path, not just
+ * redundancy.
  */
 async function initializeCheckout({ amount, currency, email, name, reference }) {
   if (!korapay.secretKey) {
     return { configured: false, checkoutUrl: null, reference };
   }
-
-  const notificationUrl = korapay.webhookSecret
-    ? `${apiPublicUrl}/api/subscription/webhook?token=${korapay.webhookSecret}`
-    : `${apiPublicUrl}/api/subscription/webhook`;
 
   try {
     const res = await axios.post(
@@ -33,7 +29,6 @@ async function initializeCheckout({ amount, currency, email, name, reference }) 
         reference,
         customer: { email, name: name || undefined },
         redirect_url: `${clientUrl}/subscribe/plans?reference=${reference}`,
-        notification_url: notificationUrl,
         narration: 'JobMatch subscription'
       },
       {

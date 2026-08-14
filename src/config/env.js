@@ -86,16 +86,17 @@ module.exports = {
   korapay: {
     secretKey: process.env.KORAPAY_SECRET_KEY,
     publicKey: process.env.KORAPAY_PUBLIC_KEY,
-    // Extra shared-secret layer on the webhook URL, on top of (not instead
-    // of) KoraPay's documented HMAC signature check — see korapayService.js.
-    webhookSecret: process.env.KORAPAY_WEBHOOK_SECRET,
     baseUrl: process.env.KORAPAY_BASE_URL || 'https://api.korapay.com'
   },
 
-  // Where KoraPay's servers reach this API for webhooks — must be a real
-  // public URL (a tunnel like ngrok locally) for webhook delivery to work at
-  // all; KoraPay cannot reach "localhost".
-  apiPublicUrl: process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 5000}`,
+  // Shared secret the korapay-webhook-router attaches as `x-router-secret`
+  // to every request it forwards — proves an incoming webhook actually came
+  // through the router, not a direct spoofed call. Must match the same
+  // value configured on the router's own end (ROUTER_FORWARD_SECRET there).
+  // Optional: if unset, this check is skipped and the KoraPay HMAC signature
+  // (see korapayService.verifyWebhookSignature) is the sole check — still a
+  // real, sufficient verification on its own.
+  routerForwardSecret: process.env.ROUTER_FORWARD_SECRET,
 
   // Stubbed until a real key/verified sender exist — see emailService.js.
   // Absent key means notifyNewMatches logs and skips the send instead of

@@ -9,21 +9,26 @@
  * tier was meant to sell — so the whole tier is dropped until auto-apply is
  * genuinely feasible.
  */
+// Priced in NGN, not USD — confirmed live against the real KoraPay account
+// that only USD checkout fails ("no channel enabled"); NGN succeeds at a
+// realistic amount. ~₦1,362/$1 at the time these were set (Aug 2026), round
+// numbers chosen deliberately rather than an exact conversion that would
+// need updating every time the exchange rate moves.
 const PLANS = {
   trial: {
     id: 'trial',
     label: '7-Day Trial',
-    amount: 5,
-    currency: 'USD',
+    amount: 7000,
+    currency: 'NGN',
     interval: 'trial',
     trialDays: 7,
-    description: 'Full access for 7 days. $5 charged immediately, one-time.'
+    description: 'Full access for 7 days. ₦7,000 charged immediately, one-time.'
   },
   monthly: {
     id: 'monthly',
     label: 'Monthly',
-    amount: 10,
-    currency: 'USD',
+    amount: 14000,
+    currency: 'NGN',
     interval: 'month',
     description: 'Unlimited matches, billed every 30 days.'
   }
