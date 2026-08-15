@@ -31,7 +31,8 @@ const gated = [
   ['AFFINDA_WORKSPACE', 'resume upload parsing (Path A) — the Affinda workspace to upload into'],
   ['AFFINDA_DOCUMENT_TYPE', 'resume upload parsing (Path A) — without it, extraction silently no-ops'],
   ['KORAPAY_SECRET_KEY', 'subscription checkout — korapayService stays stubbed without it'],
-  ['BREVO_API_KEY', 'new-match email notifications — emailService stays stubbed without it']
+  ['BREVO_API_KEY', 'new-match email notifications — emailService stays stubbed without it'],
+  ['GOOGLE_CLIENT_ID', 'Google sign-in — /auth/google will reject every request without it']
 ];
 if (dataSource === 'live') {
   gated.push(['JSEARCH_API_KEY', 'job search + scheduled pulls']);
@@ -78,6 +79,13 @@ module.exports = {
 
   claude: {
     apiKey: process.env.CLAUDE_API_KEY
+  },
+
+  // Same value used on both sides: the frontend passes it to Google's GSI
+  // script, the backend checks it as the `audience` when verifying the ID
+  // token — a token issued for a different app must not be accepted here.
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID
   },
 
   // Absent secretKey means checkout is recorded locally (pending

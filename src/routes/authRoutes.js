@@ -4,6 +4,7 @@ const auth = require('../middleware/auth');
 const {
   register,
   login,
+  googleAuth,
   getMe,
   updateMe,
   changePassword,
@@ -17,6 +18,8 @@ const {
 
 router.post('/register', register);
 router.post('/login', login);
+// No auth — this IS the auth step (verifies the Google ID token itself).
+router.post('/google', googleAuth);
 router.get('/me', auth, getMe);
 router.patch('/me', auth, updateMe);
 router.patch('/me/password', auth, changePassword);

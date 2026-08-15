@@ -1,13 +1,16 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
 const ParsedResume = require('../models/ParsedResume');
 const Match = require('../models/Match');
 const Subscription = require('../models/Subscription');
-const { jwtSecret, jwtExpiresIn } = require('../config/env');
+const { jwtSecret, jwtExpiresIn, google } = require('../config/env');
 const asyncHandler = require('../utils/asyncHandler');
 const { sendEmail, verificationEmail, passwordResetEmail } = require('../services/emailService');
+
+const googleClient = new OAuth2Client(google.clientId);
 
 function signToken(user) {
   return jwt.sign({ id: user._id, email: user.email }, jwtSecret, {
@@ -86,9 +89,78 @@ exports.login = asyncHandler(async (req, res) => {
     return res.status(401).json({ message: 'Invalid credentials' });
   }
 
+  // A Google-only account has no passwordHash at all — bcrypt.compare
+  // against null throws rather than just failing, so this must be checked
+  // before ever reaching it, not left to fall through.
+  if (!user.passwordHash) {
+    return res.status(401).json({ message: 'This account uses Google Sign-In. Use the Google button to sign in.' });
+  }
+
   const isValid = await bcrypt.compare(password, user.passwordHash);
   if (!isValid) {
     return res.status(401).json({ message: 'Invalid credentials' });
+  }
+
+  const token = signToken(user);
+
+  res.json({
+    token,
+    user: {
+      id: user._id,
+      email: user.email,
+      fullName: user.fullName,
+      preferredCountry: user.preferredCountry,
+      resumeSource: user.resumeSource,
+      resumeId: user.resumeId,
+      emailVerified: user.emailVerified
+    }
+  });
+});
+
+/**
+ * Verifies a Google ID token (from the frontend's Google Identity Services
+ * button) and either logs in an existing linked account, links Google to an
+ * existing password account with the same email (auto-link — Google has
+ * already verified that email, same trust level as our own verification
+ * flow), or creates a brand new account. Either way it ends in the same
+ * signToken()/response shape as register/login, so nothing downstream
+ * (RequireAuth, onboarding, etc.) needs to know which path was taken.
+ */
+exports.googleAuth = asyncHandler(async (req, res) => {
+  const { idToken } = req.body;
+  if (!idToken) return res.status(400).json({ message: 'idToken is required' });
+  if (!google.clientId) {
+    return res.status(503).json({ message: 'Google Sign-In is not configured yet.' });
+  }
+
+  let payload;
+  try {
+    const ticket = await googleClient.verifyIdToken({ idToken, audience: google.clientId });
+    payload = ticket.getPayload();
+  } catch {
+    return res.status(401).json({ message: 'Invalid Google token' });
+  }
+
+  const { sub: googleId, email, name, email_verified: googleEmailVerified } = payload;
+  if (!email) return res.status(401).json({ message: 'Google account has no email' });
+
+  let user = await User.findOne({ googleId });
+
+  if (!user) {
+    user = await User.findOne({ email: email.toLowerCase() });
+    if (user) {
+      // Existing password account, same email — link rather than duplicate.
+      user.googleId = googleId;
+      if (googleEmailVerified) user.emailVerified = true;
+      await user.save();
+    } else {
+      user = await User.create({
+        email: email.toLowerCase(),
+        googleId,
+        fullName: name || null,
+        emailVerified: Boolean(googleEmailVerified)
+      });
+    }
   }
 
   const token = signToken(user);

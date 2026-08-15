@@ -3,7 +3,14 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
-    passwordHash: { type: String, required: true },
+    // Optional — a Google-only account has no password at all. login() must
+    // reject password sign-in for these before ever reaching bcrypt.compare
+    // (comparing against null throws, not just fails).
+    passwordHash: { type: String, default: null },
+    // Google's stable per-account id (the ID token's `sub` claim) — set the
+    // moment a Google sign-in is linked, whether that's a brand new account
+    // or an existing password account matched by email (see authController).
+    googleId: { type: String, default: null, unique: true, sparse: true },
     fullName: { type: String, default: null },
     resumeSource: { type: String, enum: ['uploaded', 'generated', null], default: null },
     resumeId: { type: mongoose.Schema.Types.ObjectId, ref: 'ParsedResume', default: null },
