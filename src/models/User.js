@@ -10,7 +10,15 @@ const userSchema = new mongoose.Schema(
     // Google's stable per-account id (the ID token's `sub` claim) — set the
     // moment a Google sign-in is linked, whether that's a brand new account
     // or an existing password account matched by email (see authController).
-    googleId: { type: String, default: null, unique: true, sparse: true },
+    //
+    // No `default` here on purpose — a sparse unique index only excludes
+    // documents where the field is genuinely ABSENT, not documents where
+    // it's present with value `null`. `default: null` was writing an
+    // explicit null onto every plain signup, so the *second* one always
+    // collided with the first on the shared null slot (E11000). Omitting
+    // the field entirely for non-Google accounts is what actually makes
+    // sparse+unique work as intended.
+    googleId: { type: String, unique: true, sparse: true },
     fullName: { type: String, default: null },
     resumeSource: { type: String, enum: ['uploaded', 'generated', null], default: null },
     resumeId: { type: mongoose.Schema.Types.ObjectId, ref: 'ParsedResume', default: null },

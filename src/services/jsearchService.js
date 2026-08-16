@@ -28,6 +28,11 @@ function mapJSearchResultToJob(raw) {
       ? new Date(raw.job_posted_at_datetime_utc)
       : null,
     fetched_at: new Date(),
+    // Stamped from the config at the moment this document is written, not
+    // guessed later — this is what makes "are we actually serving live
+    // data" a real, queryable fact instead of something that has to be
+    // manually cross-referenced against jobDummyData.
+    source: jsearch.dataSource === 'fixture' ? 'fixture' : 'live',
     rawPayload: raw
   };
 }

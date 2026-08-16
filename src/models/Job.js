@@ -22,6 +22,13 @@ const jobSchema = new mongoose.Schema(
     job_salary_period: String,
     job_posted_at: Date,
     fetched_at: { type: Date, default: Date.now },
+    // Which pipeline produced this document — fixture-era cache entries
+    // masquerading as fresh (same fetched_at freshness check, no way to
+    // tell them apart from real JSearch results) has now caused real
+    // confusion twice. Stored per-document specifically so "are we actually
+    // serving live data" is a one-line query, not a manual cross-reference
+    // against src/jobDummyData.
+    source: { type: String, enum: ['fixture', 'live'], required: true },
     rawPayload: { type: mongoose.Schema.Types.Mixed }
   },
   { timestamps: true }
