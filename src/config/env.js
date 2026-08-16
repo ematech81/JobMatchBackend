@@ -44,12 +44,24 @@ for (const [key, feature] of gated) {
   }
 }
 
+// Testing-period switch: OFF means requireActiveSubscription passes everyone
+// through regardless of real payment status, so the rest of the app is
+// testable before KoraPay checkout is something real users go through. Must
+// default to ON (gate enforced) if unset — an absent env var must never
+// silently disable the paywall. Flip SUBSCRIPTION_GATE_ENABLED=false to test,
+// remove it (or set back to true) before real launch.
+const subscriptionGateEnabled = process.env.SUBSCRIPTION_GATE_ENABLED !== 'false';
+if (!subscriptionGateEnabled) {
+  console.warn('[Config] SUBSCRIPTION_GATE_ENABLED=false — subscription paywall is OFF. Testing only, re-enable before launch.');
+}
+
 module.exports = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
   mongoUri: process.env.MONGO_URI,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  subscriptionGateEnabled,
 
   jsearch: {
     apiKey: process.env.JSEARCH_API_KEY,
