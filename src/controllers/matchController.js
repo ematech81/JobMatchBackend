@@ -26,7 +26,14 @@ exports.getMyMatches = asyncHandler(async (req, res) => {
     .limit(parsedLimit)
     .populate('jobId');
 
-  res.json({ matches, count: matches.length });
+  // populate() silently returns jobId: null if the referenced Job document
+  // no longer exists (e.g. a cache wipe) — filtered out here so the client
+  // never has to guess what an "Unknown employer" card with no data means.
+  // The Match itself is stale at that point too (nothing to score against
+  // any more); a fresh matching run naturally replaces it.
+  const usable = matches.filter((m) => m.jobId);
+
+  res.json({ matches: usable, count: usable.length });
 });
 
 /**
