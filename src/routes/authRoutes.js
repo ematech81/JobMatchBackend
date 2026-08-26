@@ -2,6 +2,12 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const {
+  loginLimiter,
+  registerLimiter,
+  forgotPasswordLimiter,
+  resendVerificationLimiter
+} = require('../middleware/rateLimiters');
+const {
   register,
   login,
   googleAuth,
@@ -16,8 +22,8 @@ const {
   resetPassword
 } = require('../controllers/authController');
 
-router.post('/register', register);
-router.post('/login', login);
+router.post('/register', registerLimiter, register);
+router.post('/login', loginLimiter, login);
 // No auth — this IS the auth step (verifies the Google ID token itself).
 router.post('/google', googleAuth);
 router.get('/me', auth, getMe);
@@ -27,10 +33,12 @@ router.delete('/me', auth, deleteAccount);
 router.get('/me/export', auth, exportMyData);
 // No auth — the token is the proof, not the session (see verifyEmail).
 router.post('/verify-email', verifyEmail);
-router.post('/resend-verification', auth, resendVerificationEmail);
+router.post('/resend-verification', auth, resendVerificationLimiter, resendVerificationEmail);
 // No auth on either — you're logged out precisely because you forgot your
-// password; the reset token itself is what proves it's really you.
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
+// password; the reset token itself is what proves it's really you. Same
+// limiter on both: forgot-password sends an email per request, and
+// reset-password is the token-guessing surface for it.
+router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
+router.post('/reset-password', forgotPasswordLimiter, resetPassword);
 
 module.exports = router;

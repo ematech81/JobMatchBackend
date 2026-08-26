@@ -20,7 +20,17 @@ const subscriptionSchema = new mongoose.Schema(
     // not looked-up-by-id, since it has to exist before KoraPay ever calls
     // back. `koraPayReference` below is a different thing: KoraPay's own
     // payment_reference, only known after the fact.
-    checkoutReference: { type: String, default: null, unique: true, sparse: true, index: true },
+    //
+    // No `default` here — same reasoning as User.googleId (see that file's
+    // comment): a sparse unique index only excludes documents where the
+    // field is genuinely absent, not documents where it's explicitly null.
+    // `default: null` would land every Subscription that skips this field on
+    // the same shared null slot, breaking after the first one. Currently no
+    // code path creates a Subscription without setting this immediately, so
+    // this was dormant, not yet triggered — but it's the exact same landmine
+    // that broke registration once already, so it's not staying in place
+    // until something eventually does hit it.
+    checkoutReference: { type: String, unique: true, sparse: true, index: true },
     koraPayReference: { type: String, default: null },
     startedAt: { type: Date, default: null },
     currentPeriodEnd: { type: Date, default: null }

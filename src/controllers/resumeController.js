@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const ParsedResume = require('../models/ParsedResume');
 const asyncHandler = require('../utils/asyncHandler');
+const { isValidFileSignature } = require('../utils/fileSignature');
 const { parseResumeWithAffinda } = require('../services/affindaService');
 const {
   buildResumeFromAnswers,
@@ -15,6 +16,15 @@ const { computeResumeStrength, totalExperienceMonths } = require('../utils/resum
 exports.uploadResume = asyncHandler(async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  // multer's fileFilter only checked the client-claimed Content-Type, which
+  // is trivially spoofable — this checks the actual bytes before anything
+  // gets sent to Affinda.
+  if (!isValidFileSignature(req.file.buffer, req.file.mimetype)) {
+    return res.status(400).json({
+      message: "This file doesn't look like a valid PDF or Word document. Please check the file and try again."
+    });
   }
 
   let canonical;
