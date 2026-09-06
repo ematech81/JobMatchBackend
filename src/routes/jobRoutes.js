@@ -12,6 +12,13 @@ const {
   getJobById,
   getSimilarJobs
 } = require('../controllers/jobController');
+const {
+  generateApplication,
+  getApplication,
+  updateApplication,
+  downloadApplicationResumePdf,
+  downloadApplicationCoverLetterPdf
+} = require('../controllers/applicationController');
 
 // Must come before /:jobId — Express would otherwise match "stats" as a
 // jobId and route it into getJobById instead. Public and deliberately so
@@ -28,5 +35,12 @@ router.get('/:jobId/similar', auth, requireResume, requireActiveSubscription, ge
 router.get('/:jobId', auth, requireResume, requireActiveSubscription, getJobById);
 router.post('/:jobId/save', auth, requireResume, requireActiveSubscription, saveJob);
 router.delete('/:jobId/save', auth, requireResume, requireActiveSubscription, unsaveJob);
+
+// Application Generator — same gating as every other real-job-data route.
+router.post('/:jobId/application', auth, requireResume, requireActiveSubscription, generateApplication);
+router.get('/:jobId/application', auth, requireResume, requireActiveSubscription, getApplication);
+router.put('/:jobId/application', auth, requireResume, requireActiveSubscription, updateApplication);
+router.get('/:jobId/application/resume.pdf', auth, requireResume, requireActiveSubscription, downloadApplicationResumePdf);
+router.get('/:jobId/application/cover-letter.pdf', auth, requireResume, requireActiveSubscription, downloadApplicationCoverLetterPdf);
 
 module.exports = router;

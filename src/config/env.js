@@ -32,7 +32,8 @@ const gated = [
   ['AFFINDA_DOCUMENT_TYPE', 'resume upload parsing (Path A) — without it, extraction silently no-ops'],
   ['KORAPAY_SECRET_KEY', 'subscription checkout — korapayService stays stubbed without it'],
   ['BREVO_API_KEY', 'new-match email notifications — emailService stays stubbed without it'],
-  ['GOOGLE_CLIENT_ID', 'Google sign-in — /auth/google will reject every request without it']
+  ['GOOGLE_CLIENT_ID', 'Google sign-in — /auth/google will reject every request without it'],
+  ['ANTHROPIC_API_KEY', 'Application Generator document generation — will fail without it']
 ];
 if (dataSource === 'live') {
   gated.push(['JSEARCH_API_KEY', 'job search + scheduled pulls']);
@@ -89,8 +90,13 @@ module.exports = {
     apiBase: process.env.AFFINDA_API_BASE || 'https://api.affinda.com'
   },
 
-  claude: {
-    apiKey: process.env.CLAUDE_API_KEY
+  // Powers ApplicationGenerator's real document generation (tailored summary
+  // + cover letter) — see services/aiApplicationService.js. Absent key means
+  // that endpoint returns a clear "not configured" error rather than
+  // pretending to generate something.
+  anthropic: {
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    model: process.env.AI_MODEL || 'claude-sonnet-5'
   },
 
   // Same value used on both sides: the frontend passes it to Google's GSI

@@ -2,6 +2,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { searchJobsByCountry, searchAllCountries } = require('../services/jsearchService');
 const User = require('../models/User');
 const Job = require('../models/Job');
+const findJobByEitherId = require('../utils/findJobByEitherId');
 
 /**
  * GET /api/jobs/search?country=Nigeria&page=1
@@ -94,17 +95,6 @@ exports.getSimilarJobs = asyncHandler(async (req, res) => {
 
   res.json({ jobs });
 });
-
-/**
- * Jobs are addressable by either JSearch's external `job_id` or our Mongo
- * `_id`, so route params accept both. Only treat the param as an ObjectId
- * when it structurally is one — otherwise Mongoose throws a CastError.
- */
-function findJobByEitherId(id = '') {
-  const or = [{ job_id: id }];
-  if (/^[0-9a-fA-F]{24}$/.test(id)) or.push({ _id: id });
-  return Job.findOne({ $or: or });
-}
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
