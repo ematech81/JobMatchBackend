@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed": "node src/scripts/seedJobs.js"
+    "seed": "node src/scripts/seedJobs.js",
+    "promote-admin": "node src/scripts/promoteAdmin.js"
   },
   "dependencies": {
     "@affinda/affinda": "^7.7.1",

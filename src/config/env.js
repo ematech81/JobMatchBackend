@@ -147,5 +147,17 @@ module.exports = {
       .map(s => s.trim())
   },
 
+  // Comma-separated browser origins CORS allows — the web app and the
+  // separate admin dashboard, each its own Vercel domain. Falls back to the
+  // single CLIENT_URL so existing deployments (Railway env only has
+  // CLIENT_URL set) keep working unchanged until CLIENT_URLS is added.
+  clientUrls: (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:3000')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean),
+
+  // Kept as a single value for socketService, which only the web app's
+  // real-time match notifications use — the admin dashboard has no socket
+  // connection, so it doesn't need to be in this one.
   clientUrl: process.env.CLIENT_URL || 'http://localhost:3000'
 };

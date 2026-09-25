@@ -74,6 +74,7 @@ exports.register = asyncHandler(async (req, res) => {
     user: {
       id: user._id,
       email: user.email,
+      role: user.role,
       fullName: user.fullName,
       preferredCountry: user.preferredCountry,
       emailVerified: user.emailVerified
@@ -108,6 +109,7 @@ exports.login = asyncHandler(async (req, res) => {
     user: {
       id: user._id,
       email: user.email,
+      role: user.role,
       fullName: user.fullName,
       preferredCountry: user.preferredCountry,
       resumeSource: user.resumeSource,
@@ -170,6 +172,7 @@ exports.googleAuth = asyncHandler(async (req, res) => {
     user: {
       id: user._id,
       email: user.email,
+      role: user.role,
       fullName: user.fullName,
       preferredCountry: user.preferredCountry,
       resumeSource: user.resumeSource,

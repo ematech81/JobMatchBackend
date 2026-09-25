@@ -3,6 +3,11 @@ const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    // 'admin' unlocks the separate admin dashboard app (its own Vercel
+    // deployment) via requireAdmin — checked fresh from the DB on every
+    // admin request, never trusted from the JWT, so promoting/demoting
+    // takes effect immediately without waiting for a token to expire.
+    role: { type: String, enum: ['user', 'admin'], default: 'user' },
     // Optional — a Google-only account has no password at all. login() must
     // reject password sign-in for these before ever reaching bcrypt.compare
     // (comparing against null throws, not just fails).
