@@ -78,9 +78,12 @@ function generateResumePdf(parsedResume) {
     if (parsedResume.experience?.length) {
       doc.fontSize(14).text('Experience');
       parsedResume.experience.forEach((exp) => {
-        doc
-          .fontSize(11)
-          .text(`${exp.title} — ${exp.company} (${exp.durationMonths} months)`);
+        // A real "(0 months)" is meaningless to a reader — omit the
+        // duration entirely rather than print a number that looks like
+        // broken data (e.g. current/first roles where it was never
+        // captured, or founder roles with no fixed tenure yet).
+        const duration = exp.durationMonths > 0 ? ` (${exp.durationMonths} months)` : '';
+        doc.fontSize(11).text(`${exp.title} — ${exp.company}${duration}`);
       });
       doc.moveDown();
     }

@@ -43,6 +43,7 @@ exports.generateApplication = asyncHandler(async (req, res) => {
         summary: generated.summary,
         coverLetter: generated.coverLetter,
         addedSkills,
+        topSkills: generated.topSkills,
         model: openai.model
       }
     },
@@ -101,12 +102,21 @@ exports.downloadApplicationResumePdf = asyncHandler(async (req, res) => {
   if (!application) return res.status(404).json({ message: 'No generated application for this job yet.' });
 
   // Same generic PDF renderer the base resume download uses — the tailored
-  // version is just that resume with the generated summary and this
-  // application's skill additions layered on top, not a different pipeline.
+  // version is just that resume with the generated summary and skills
+  // layered on top, not a different pipeline. Uses the AI-curated
+  // topSkills (relevant subset, not a raw dump of a 50+ item parsed list)
+  // when available; only merges the full raw list as a fallback for
+  // generations made before topSkills existed, or if the AI genuinely
+  // returned nothing usable.
+  const skills =
+    application.topSkills?.length > 0
+      ? application.topSkills
+      : [...new Set([...(resume.skills || []), ...(application.addedSkills || [])])];
+
   const merged = {
     ...resume.toObject(),
     summary: application.summary,
-    skills: [...new Set([...(resume.skills || []), ...(application.addedSkills || [])])]
+    skills
   };
 
   const pdfBuffer = await generateResumePdf(merged);

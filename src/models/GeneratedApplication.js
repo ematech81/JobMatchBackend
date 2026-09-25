@@ -13,6 +13,12 @@ const generatedApplicationSchema = new mongoose.Schema(
     jobId: { type: mongoose.Schema.Types.ObjectId, ref: 'Job', required: true },
     summary: { type: String, required: true },
     addedSkills: [String],
+    // AI-curated highlight list for the tailored resume PDF — a priority
+    // subset of the candidate's real skills relevant to this job, not the
+    // full (often 50+ item, parser-noisy) raw skills array. Empty on
+    // generations made before this existed; the PDF download falls back
+    // gracefully when it's empty (see applicationController).
+    topSkills: [String],
     coverLetter: { type: String, required: true },
     // Which model actually produced this — useful if AI_MODEL ever changes
     // and old generations need to be told apart from new ones.

@@ -34,12 +34,14 @@ ${description}`;
 const SYSTEM_PROMPT = `You write tailored job-application content for a job-matching platform. Given a candidate's resume and a specific job posting, produce:
 1. A professional summary (2-4 sentences) that positions the candidate for THIS specific role, written in first person as it would appear at the top of their resume.
 2. A complete cover letter (roughly 250-400 words) addressed to the employer, referencing the actual company and role, written in a professional but natural tone.
+3. A curated list of 8-12 skills to headline on the tailored resume — the ones most relevant to THIS job, in priority order. This is a selection, not a dump: real resumes (especially ones parsed automatically from a document) often carry 50+ extracted skills, many irrelevant or noisy for a given role. Pick the best-fitting subset instead of listing everything.
 
 Hard rules:
 - Only use experience, skills, and education actually present in the resume provided. Never invent accomplishments, employers, metrics, or credentials the candidate didn't list.
+- topSkills must ONLY contain skills that appear verbatim in the candidate's Skills list provided below — never invent a skill that isn't there, even if the job needs it.
 - You may phrase existing experience to emphasize its relevance to the job, but do not fabricate anything new.
 - If the resume is thin for this role, write an honest, confident letter that doesn't overclaim — do not compensate for gaps by making things up.
-- Respond with a JSON object with exactly these two keys: {"summary": "...", "coverLetter": "..."}`;
+- Respond with a JSON object with exactly these three keys: {"summary": "...", "coverLetter": "...", "topSkills": ["...", "..."]}`;
 
 /**
  * Real call to OpenAI — no fallback/stub path. If OPENAI_API_KEY is unset,
@@ -91,7 +93,16 @@ async function generateTailoredApplication({ resume, job, addedSkills }) {
     throw new Error('AI response was missing summary or coverLetter.');
   }
 
-  return { summary: parsed.summary, coverLetter: parsed.coverLetter };
+  // Don't just trust the prompt's "only pick from the candidate's real
+  // skills" instruction — verify it server-side. A hallucinated skill here
+  // would go straight onto a document the candidate hands to an employer.
+  const candidateSkills = [...new Set([...(resume.skills || []), ...(addedSkills || [])])];
+  const candidateSkillsLower = new Set(candidateSkills.map((s) => s.toLowerCase()));
+  const topSkills = Array.isArray(parsed.topSkills)
+    ? parsed.topSkills.filter((s) => typeof s === 'string' && candidateSkillsLower.has(s.toLowerCase()))
+    : [];
+
+  return { summary: parsed.summary, coverLetter: parsed.coverLetter, topSkills };
 }
 
 module.exports = { generateTailoredApplication };
