@@ -105,7 +105,7 @@ function generateResumePdf(parsedResume) {
 /**
  * Renders a generated cover letter into a downloadable PDF buffer —
  * ApplicationGenerator's second document. Plain business-letter layout:
- * sender name, date, employer/role line, then the body Claude wrote.
+ * sender name, date, employer/role line, then the AI-generated body text.
  */
 function generateCoverLetterPdf(coverLetterText, { fullName, jobTitle, employerName } = {}) {
   return new Promise((resolve, reject) => {

@@ -1,7 +1,7 @@
 const axios = require('axios');
-const { anthropic } = require('../config/env');
+const { openai } = require('../config/env');
 
-const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions';
 const MAX_JOB_DESCRIPTION_CHARS = 3000;
 
 function buildResumeBlock(resume, addedSkills) {
@@ -39,11 +39,11 @@ Hard rules:
 - Only use experience, skills, and education actually present in the resume provided. Never invent accomplishments, employers, metrics, or credentials the candidate didn't list.
 - You may phrase existing experience to emphasize its relevance to the job, but do not fabricate anything new.
 - If the resume is thin for this role, write an honest, confident letter that doesn't overclaim — do not compensate for gaps by making things up.
-- Respond with ONLY a JSON object, no markdown code fences, no commentary: {"summary": "...", "coverLetter": "..."}`;
+- Respond with a JSON object with exactly these two keys: {"summary": "...", "coverLetter": "..."}`;
 
 /**
- * Real call to Claude — no fallback/stub path. If ANTHROPIC_API_KEY is
- * unset, the controller should refuse before ever reaching this (see
+ * Real call to OpenAI — no fallback/stub path. If OPENAI_API_KEY is unset,
+ * the controller should refuse before ever reaching this (see
  * applicationController.generateApplication), the same pattern as
  * korapayService/emailService for their own missing keys.
  */
@@ -51,31 +51,38 @@ async function generateTailoredApplication({ resume, job, addedSkills }) {
   const userPrompt = `CANDIDATE RESUME:\n${buildResumeBlock(resume, addedSkills)}\n\nJOB POSTING:\n${buildJobBlock(job)}`;
 
   const res = await axios.post(
-    ANTHROPIC_ENDPOINT,
+    OPENAI_ENDPOINT,
     {
-      model: anthropic.model,
+      model: openai.model,
+      messages: [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt }
+      ],
+      // Guarantees valid JSON back (OpenAI-specific — the API rejects this
+      // option unless the prompt itself mentions "JSON", which it does
+      // above), so no defensive code-fence-stripping is needed the way the
+      // Claude version required.
+      response_format: { type: 'json_object' },
       max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: userPrompt }]
+      // Lower than OpenAI's default (1.0) — this is professional
+      // resume/cover-letter copy, not creative writing; less variance
+      // between regenerations of the same job is the right trade-off here.
+      temperature: 0.7
     },
     {
       headers: {
-        'x-api-key': anthropic.apiKey,
-        'anthropic-version': '2023-06-01',
+        Authorization: `Bearer ${openai.apiKey}`,
         'content-type': 'application/json'
       },
       timeout: 60000
     }
   );
 
-  const rawText = res.data?.content?.[0]?.text || '';
-  // Claude generally complies with "no code fences", but strip them
-  // defensively rather than let a rare non-compliant response 500.
-  const cleaned = rawText.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+  const rawText = res.data?.choices?.[0]?.message?.content || '';
 
   let parsed;
   try {
-    parsed = JSON.parse(cleaned);
+    parsed = JSON.parse(rawText);
   } catch {
     throw new Error('AI response was not valid JSON — could not parse generated content.');
   }

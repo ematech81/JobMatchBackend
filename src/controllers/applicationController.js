@@ -2,21 +2,21 @@ const asyncHandler = require('../utils/asyncHandler');
 const findJobByEitherId = require('../utils/findJobByEitherId');
 const ParsedResume = require('../models/ParsedResume');
 const GeneratedApplication = require('../models/GeneratedApplication');
-const { anthropic } = require('../config/env');
+const { openai } = require('../config/env');
 const { generateTailoredApplication } = require('../services/aiApplicationService');
 const { generateResumePdf, generateCoverLetterPdf } = require('../services/resumeGeneratorService');
 
 /**
  * POST /api/jobs/:jobId/application
  * Generates (or regenerates — upsert) a tailored summary + cover letter for
- * this job, via a real Claude call. `addedSkills` are the skills the user
+ * this job, via a real OpenAI call. `addedSkills` are the skills the user
  * picked in the skill-gap step, folded into the generation context; they
  * aren't written back to the user's actual resume here — that already
  * happens for real, separately, via PUT /resume/me (see ApplicationGenerator
  * on the frontend), so this doesn't duplicate that write.
  */
 exports.generateApplication = asyncHandler(async (req, res) => {
-  if (!anthropic.apiKey) {
+  if (!openai.apiKey) {
     return res.status(503).json({ message: 'Application Generator is not configured yet.' });
   }
 
@@ -43,7 +43,7 @@ exports.generateApplication = asyncHandler(async (req, res) => {
         summary: generated.summary,
         coverLetter: generated.coverLetter,
         addedSkills,
-        model: anthropic.model
+        model: openai.model
       }
     },
     { new: true, upsert: true, setDefaultsOnInsert: true }

@@ -33,7 +33,7 @@ const gated = [
   ['KORAPAY_SECRET_KEY', 'subscription checkout — korapayService stays stubbed without it'],
   ['BREVO_API_KEY', 'new-match email notifications — emailService stays stubbed without it'],
   ['GOOGLE_CLIENT_ID', 'Google sign-in — /auth/google will reject every request without it'],
-  ['ANTHROPIC_API_KEY', 'Application Generator document generation — will fail without it']
+  ['OPENAI_API_KEY', 'Application Generator document generation — will fail without it']
 ];
 if (dataSource === 'live') {
   gated.push(['JSEARCH_API_KEY', 'job search + scheduled pulls']);
@@ -93,10 +93,13 @@ module.exports = {
   // Powers ApplicationGenerator's real document generation (tailored summary
   // + cover letter) — see services/aiApplicationService.js. Absent key means
   // that endpoint returns a clear "not configured" error rather than
-  // pretending to generate something.
-  anthropic: {
-    apiKey: process.env.ANTHROPIC_API_KEY,
-    model: process.env.AI_MODEL || 'claude-sonnet-5'
+  // pretending to generate something. AI_MODEL is deliberately provider-
+  // agnostic in name — switching providers (this was Anthropic before) only
+  // means changing this value and the service that reads it, not the env
+  // var itself.
+  openai: {
+    apiKey: process.env.OPENAI_API_KEY,
+    model: process.env.AI_MODEL || 'gpt-4o'
   },
 
   // Same value used on both sides: the frontend passes it to Google's GSI

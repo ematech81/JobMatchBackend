@@ -18,16 +18,16 @@ const PLANS = {
   trial: {
     id: 'trial',
     label: '7-Day Trial',
-    amount: 7000,
+    amount: 5000,
     currency: 'NGN',
     interval: 'trial',
     trialDays: 7,
-    description: 'Full access for 7 days. ₦7,000 charged immediately, one-time.'
+    description: 'Full access for 7 days. ₦5,000 charged immediately, one-time.'
   },
   monthly: {
     id: 'monthly',
     label: 'Monthly',
-    amount: 14000,
+    amount: 10000,
     currency: 'NGN',
     interval: 'month',
     description: 'Unlimited matches, billed every 30 days.'
