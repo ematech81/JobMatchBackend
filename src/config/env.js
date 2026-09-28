@@ -54,6 +54,18 @@ if (!subscriptionGateEnabled) {
   console.warn('[Config] SUBSCRIPTION_GATE_ENABLED=false — subscription paywall is OFF. Testing only, re-enable before launch.');
 }
 
+// Single source of truth for both clientUrls (below) and clientUrl — a
+// deployment only setting CLIENT_URLS (as Railway's production env does)
+// must not leave clientUrl silently defaulting to localhost. This was
+// exactly that bug: emailService.js (every notification/verification/
+// password-reset link) and socketService.js both read clientUrl alone, so
+// they were building links against 'http://localhost:3000' in production
+// the whole time CLIENT_URLS existed without a matching CLIENT_URL.
+const resolvedClientUrls = (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:3000')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
 module.exports = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -143,16 +155,12 @@ module.exports = {
   },
 
   // Comma-separated browser origins CORS allows — the web app and the
-  // separate admin dashboard, each its own Vercel domain. Falls back to the
-  // single CLIENT_URL so existing deployments (Railway env only has
-  // CLIENT_URL set) keep working unchanged until CLIENT_URLS is added.
-  clientUrls: (process.env.CLIENT_URLS || process.env.CLIENT_URL || 'http://localhost:3000')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean),
+  // separate admin dashboard, each its own Vercel domain.
+  clientUrls: resolvedClientUrls,
 
-  // Kept as a single value for socketService, which only the web app's
-  // real-time match notifications use — the admin dashboard has no socket
-  // connection, so it doesn't need to be in this one.
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:3000'
+  // Single value for socketService (Socket.IO CORS) and emailService (every
+  // link it builds) — the main web app's own URL, always the first entry of
+  // the same whitelist above, never a separately-configured value that could
+  // drift out of sync with it.
+  clientUrl: resolvedClientUrls[0]
 };
