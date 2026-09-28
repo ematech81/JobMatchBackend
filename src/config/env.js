@@ -27,9 +27,7 @@ console.log(
 // than the whole server, so warn loudly instead of exiting.
 const PLACEHOLDER = /^(your_|replace_|changeme)/i;
 const gated = [
-  ['AFFINDA_API_KEY', 'resume upload parsing (Path A)'],
-  ['AFFINDA_WORKSPACE', 'resume upload parsing (Path A) — the Affinda workspace to upload into'],
-  ['AFFINDA_DOCUMENT_TYPE', 'resume upload parsing (Path A) — without it, extraction silently no-ops'],
+  ['APILAYER_API_KEY', 'resume upload parsing (Path A)'],
   ['KORAPAY_SECRET_KEY', 'subscription checkout — korapayService stays stubbed without it'],
   ['BREVO_API_KEY', 'new-match email notifications — emailService stays stubbed without it'],
   ['GOOGLE_CLIENT_ID', 'Google sign-in — /auth/google will reject every request without it'],
@@ -78,16 +76,13 @@ module.exports = {
     cacheTtlHours: Number(process.env.JOB_CACHE_TTL_HOURS || 6)
   },
 
-  // Official Affinda API (not the RapidAPI marketplace listing) — a direct
-  // account with a workspace configured for Resume document types.
-  affinda: {
-    apiKey: process.env.AFFINDA_API_KEY,
-    workspace: process.env.AFFINDA_WORKSPACE,
-    // Auto-classification silently no-ops (returns documentType: null and an
-    // empty data object, no error) on plain/sparse documents — pinning this
-    // explicitly is what actually makes extraction run.
-    documentType: process.env.AFFINDA_DOCUMENT_TYPE,
-    apiBase: process.env.AFFINDA_API_BASE || 'https://api.affinda.com'
+  // Resume-parsing provider for Path A (upload -> parse). Switched from
+  // Affinda after that account ran out of parsing credits (403
+  // no_parsing_credits — a billing issue on Affinda's side, not fixable in
+  // code). See services/apilayerResumeService.js.
+  apilayer: {
+    apiKey: process.env.APILAYER_API_KEY,
+    baseUrl: process.env.APILAYER_BASE_URL || 'https://api.apilayer.com/resume_parser'
   },
 
   // Powers ApplicationGenerator's real document generation (tailored summary

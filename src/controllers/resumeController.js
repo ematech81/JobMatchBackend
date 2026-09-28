@@ -2,7 +2,7 @@ const User = require('../models/User');
 const ParsedResume = require('../models/ParsedResume');
 const asyncHandler = require('../utils/asyncHandler');
 const { isValidFileSignature } = require('../utils/fileSignature');
-const { parseResumeWithAffinda } = require('../services/affindaService');
+const { parseResumeWithApilayer } = require('../services/apilayerResumeService');
 const {
   buildResumeFromAnswers,
   generateResumePdf
@@ -20,7 +20,7 @@ exports.uploadResume = asyncHandler(async (req, res) => {
 
   // multer's fileFilter only checked the client-claimed Content-Type, which
   // is trivially spoofable — this checks the actual bytes before anything
-  // gets sent to Affinda.
+  // gets sent to the parser.
   if (!isValidFileSignature(req.file.buffer, req.file.mimetype)) {
     return res.status(400).json({
       message: "This file doesn't look like a valid PDF or Word document. Please check the file and try again."
@@ -29,9 +29,14 @@ exports.uploadResume = asyncHandler(async (req, res) => {
 
   let canonical;
   try {
-    canonical = await parseResumeWithAffinda(req.file.buffer, req.file.originalname);
+    canonical = await parseResumeWithApilayer(req.file.buffer);
   } catch (err) {
-    console.error('[Affinda] parse failed, needs fallback parser:', err.message);
+    if (err.code === 'FILE_TOO_SMALL') {
+      return res.status(400).json({
+        message: 'This resume looks too short for us to parse. Please upload a more complete document, or use the guided builder instead.'
+      });
+    }
+    console.error('[ResumeParser] parse failed:', err.message);
     return res.status(502).json({
       message: 'Resume parsing service unavailable. Please try again later or use the guided builder.'
     });
